@@ -11,7 +11,8 @@ services:
     image: mediacms/mediacms-dev:latest
     volumes:
       - ./:/home/mediacms.io/mediacms/
-    command: "./deploy/docker/prestart.sh"
+    entrypoint: ""
+    command: "bash -c 'ls -la deploy/docker/ && chmod +x deploy/docker/prestart.sh && ./deploy/docker/prestart.sh'"
     environment:
       DEVELOPMENT_MODE: True
       ENABLE_UWSGI: 'no'
@@ -42,15 +43,17 @@ services:
       - web
   web:
     image: mediacms/mediacms-dev:latest
-    command: "python manage.py runserver 0.0.0.0:80"
+    entrypoint: ""
+    command: "bash -c 'python manage.py migrate && python manage.py runserver 0.0.0.0:8080'"
     environment:
       DEVELOPMENT_MODE: True
     ports:
-      - "80:80"
+      - "8080:8080"
     volumes:
       - ./:/home/mediacms.io/mediacms/
     depends_on:
-      - migrations
+      - db
+      - redis
   db:
     image: postgres:17.2-alpine
     volumes:
@@ -76,6 +79,8 @@ services:
       retries: 3
   celery_worker:
     image: mediacms/mediacms-dev:latest
+    entrypoint: ""
+    command: "bash -c 'celery -A cms worker --loglevel=info'"
     deploy:
       replicas: 1
     volumes:

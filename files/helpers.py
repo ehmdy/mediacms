@@ -170,7 +170,11 @@ def rm_dir(directory):
 
 def url_from_path(filename):
     # TODO: find a way to preserver http - https ...
-    return f"{settings.MEDIA_URL}{filename.replace(settings.MEDIA_ROOT, '')}"
+    relative_path = filename.replace(settings.MEDIA_ROOT, '')
+    # Remove leading slash to avoid double slashes
+    if relative_path.startswith('/'):
+        relative_path = relative_path[1:]
+    return f"{settings.MEDIA_URL}{relative_path}"
 
 
 def create_temp_file(suffix=None, dir=settings.TEMP_DIRECTORY):
@@ -963,3 +967,151 @@ def get_alphanumeric_only(string):
     """
     string = "".join([char for char in string if char.isalnum()])
     return string.lower()
+
+
+def detect_mkv_tracks(file_path):
+    """Detect audio and subtitle tracks in MKV files using FFprobe"""
+    try:
+        # Run ffprobe to get track information
+        cmd = [
+            'ffprobe',
+            '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_streams',
+            '-show_format',
+            file_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            logger.error(f"FFprobe failed for {file_path}: {result.stderr}")
+            return None, None
+        
+        data = json.loads(result.stdout)
+        streams = data.get('streams', [])
+        
+        audio_tracks = []
+        subtitle_tracks = []
+        
+        for stream in streams:
+            stream_index = stream.get('index', 0)
+            codec_type = stream.get('codec_type', '')
+            codec_name = stream.get('codec_name', '')
+            
+            if codec_type == 'audio':
+                # Extract audio track information
+                audio_info = {
+                    'track_index': stream_index,
+                    'codec': codec_name,
+                    'language': stream.get('tags', {}).get('language', ''),
+                    'title': stream.get('tags', {}).get('title', ''),
+                    'channels': stream.get('channels', 0),
+                    'sample_rate': stream.get('sample_rate', 0),
+                    'bitrate': stream.get('bit_rate', 0),
+                    'is_default': stream.get('disposition', {}).get('default', 0) == 1
+                }
+                audio_tracks.append(audio_info)
+                
+            elif codec_type == 'subtitle':
+                # Extract subtitle track information
+                subtitle_info = {
+                    'track_index': stream_index,
+                    'codec': codec_name,
+                    'language': stream.get('tags', {}).get('language', ''),
+                    'title': stream.get('tags', {}).get('title', ''),
+                    'is_forced': stream.get('disposition', {}).get('forced', 0) == 1,
+                    'is_default': stream.get('disposition', {}).get('default', 0) == 1
+                }
+                subtitle_tracks.append(subtitle_info)
+        
+        logger.info(f"Detected {len(audio_tracks)} audio tracks and {len(subtitle_tracks)} subtitle tracks in {file_path}")
+        return audio_tracks, subtitle_tracks
+        
+    except subprocess.TimeoutExpired:
+        logger.error(f"FFprobe timeout for {file_path}")
+        return None, None
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse FFprobe output for {file_path}: {e}")
+        return None, None
+    except Exception as e:
+        logger.error(f"Error detecting tracks in {file_path}: {e}")
+        return None, None
+
+
+def is_mkv_file(file_path):
+    """Check if a file is an MKV file using multiple methods"""
+    try:
+        # Method 1: Check file extension
+        if file_path.lower().endswith('.mkv'):
+            return True
+        
+        # Method 2: Use filetype library
+        if file_type := filetype.guess(file_path):
+            if file_type.extension == 'mkv':
+                return True
+        
+        # Method 3: Use FFprobe to check container format
+        cmd = [
+            'ffprobe',
+            '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_format',
+            file_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            format_name = data.get('format', {}).get('format_name', '').lower()
+            if 'matroska' in format_name or 'mkv' in format_name:
+                return True
+        
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error checking if {file_path} is MKV: {e}")
+        return False
+
+
+def generate_track_combinations(audio_tracks, subtitle_tracks):
+    """Generate all possible track combinations"""
+    combinations = []
+    
+    # If no audio tracks, return empty
+    if not audio_tracks:
+        return combinations
+    
+    # If no subtitle tracks, create combinations with just audio tracks
+    if not subtitle_tracks:
+        for audio_track in audio_tracks:
+            combinations.append({
+                'audio_track_index': audio_track['track_index'],
+                'subtitle_track_index': None
+            })
+    else:
+        # Create combinations with all audio and subtitle track pairs
+        for audio_track in audio_tracks:
+            # Add combination with no subtitles
+            combinations.append({
+                'audio_track_index': audio_track['track_index'],
+                'subtitle_track_index': None
+            })
+            
+            # Add combinations with each subtitle track
+            for subtitle_track in subtitle_tracks:
+                combinations.append({
+                    'audio_track_index': audio_track['track_index'],
+                    'subtitle_track_index': subtitle_track['track_index']
+                })
+    
+    return combinations
+
+
+def generate_cache_key(media_id, audio_track_index, subtitle_track_index=None):
+    """Generate a unique cache key for a track combination"""
+    import hashlib
+    
+    key_string = f"{media_id}_{audio_track_index}_{subtitle_track_index or 'none'}"
+    return hashlib.md5(key_string.encode()).hexdigest()

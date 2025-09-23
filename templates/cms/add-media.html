@@ -162,7 +162,7 @@
 			request: {
 				endpoint: '{% url 'uploader:upload' %}',
 				customHeaders: {
-					'X-CSRFToken': getCSRFToken('csrftoken'),
+					'X-CSRFToken': getCSRFToken(),
 				},
 			},
 			retry: {

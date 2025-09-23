@@ -1,10 +1,12 @@
 import json
+import os
+import mimetypes
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.mail import EmailMessage
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse, Http404
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
@@ -640,3 +642,44 @@ def view_playlist(request, friendly_token):
     context = {}
     context["playlist"] = playlist
     return render(request, "cms/playlist.html", context)
+
+
+def serve_media_file(request, path):
+    """Custom view to serve media files (HLS, subtitles, etc.)"""
+    # Construct the full file path
+    file_path = os.path.join(settings.MEDIA_ROOT, path)
+    
+    # Check if file exists
+    if not os.path.exists(file_path):
+        raise Http404("File not found")
+    
+    # Get MIME type
+    content_type, _ = mimetypes.guess_type(file_path)
+    if not content_type:
+        # Set default MIME types for HLS files
+        if file_path.endswith('.m3u8'):
+            content_type = 'application/vnd.apple.mpegurl'
+        elif file_path.endswith('.vtt'):
+            content_type = 'text/vtt'
+        elif file_path.endswith('.ts'):
+            content_type = 'video/mp2t'
+        elif file_path.endswith('.m4a'):
+            content_type = 'audio/mp4'
+        else:
+            content_type = 'application/octet-stream'
+    
+    # Read and serve the file
+    try:
+        with open(file_path, 'rb') as f:
+            content = f.read()
+        
+        response = HttpResponse(content, content_type=content_type)
+        
+        # Add CORS headers for HLS
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Range'
+        
+        return response
+    except IOError:
+        raise Http404("File not found")

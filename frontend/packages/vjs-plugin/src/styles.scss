@@ -350,6 +350,16 @@ $controlBarAnimationsDuration: 0.1s;
   content: '\f107';
 }
 
+.video-js.vjs-mediacms .vjs-audio-tracks-control .vjs-icon-placeholder {
+  font-family: MediaCmsVideoJsIcons;
+  font-weight: normal;
+  font-style: normal;
+}
+
+.video-js.vjs-mediacms .vjs-audio-tracks-control .vjs-icon-placeholder:before {
+  content: '\f108';
+}
+
 .video-js.vjs-mediacms .vjs-theater-mode-control .vjs-icon-placeholder {
   font-family: MediaCmsVideoJsIcons;
   font-weight: normal;
@@ -681,7 +691,8 @@ $controlBarAnimationsDuration: 0.1s;
 
     &.vjs-playback-speed-panel,
     &.vjs-resolutions-panel,
-    &.vjs-subtitles-panel {
+    &.vjs-subtitles-panel,
+    &.vjs-audio-tracks-panel {
       z-index: +1;
       // width: 13em;
 

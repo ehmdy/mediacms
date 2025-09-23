@@ -55,6 +55,11 @@ const defaults = {
 			default: null,
 			languages: [],
 		},
+		audioTracks: {
+			on: false,
+			default: null,
+			languages: [],
+		},
 	},
 };
 
@@ -78,6 +83,16 @@ function filterPlayerOptions(domPlayer, opt) {
 		opt.subtitles.on = ifBooleanElse(opt.subtitles.on, defaults.options.subtitles.on);
 	} else {
 		opt.subtitles.default = defaults.options.subtitles;
+	}
+
+	if (opt.audioTracks && opt.audioTracks instanceof Object) {
+		opt.audioTracks.default = void 0 !== opt.audioTracks.default ? opt.audioTracks.default : defaults.options.audioTracks.default;
+		opt.audioTracks.languages = isArray(opt.audioTracks.languages)
+			? opt.audioTracks.languages
+			: defaults.options.audioTracks.languages;
+		opt.audioTracks.on = ifBooleanElse(opt.audioTracks.on, defaults.options.audioTracks.on);
+	} else {
+		opt.audioTracks.default = defaults.options.audioTracks;
 	}
 
 	opt.autoplay =

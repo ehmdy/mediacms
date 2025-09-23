@@ -158,7 +158,10 @@ TEMP_DIRECTORY = "/tmp"  # Don't use a temp directory inside BASE_DIR!!!
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_URL = "/static/"  # where js/css files are stored on the filesystem
 MEDIA_URL = "/media/"  # URL where static files are served from the server
-STATIC_ROOT = BASE_DIR + "/static/"
+STATIC_ROOT = BASE_DIR + "/staticfiles/"
+STATICFILES_DIRS = [
+    BASE_DIR + "/static/",
+]
 # where uploaded + encoded media are stored
 MEDIA_ROOT = BASE_DIR + "/media_files/"
 
@@ -383,7 +386,7 @@ LOGGING = {
 DATABASES = {"default": {"ENGINE": "django.db.backends.postgresql", "NAME": "mediacms", "HOST": "127.0.0.1", "PORT": "5432", "USER": "mediacms", "PASSWORD": "mediacms", "OPTIONS": {'pool': True}}}
 
 
-REDIS_LOCATION = "redis://127.0.0.1:6379/1"
+REDIS_LOCATION = "redis://redis:6379/1"
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",

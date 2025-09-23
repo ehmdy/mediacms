@@ -131,24 +131,21 @@
                     // Since we're intercepting the source, just configure tracks directly
                     console.log('🎯 Configuring tracks with intercepted master playlist...');
                     
-                    // Configure tracks in Video.js
+                    // Configure tracks in Video.js (only once)
                     configureVideoJsTracks(player, audioTracks, subtitleTracks);
                     
                     // Listen for when audio tracks are actually loaded and ready
                     player.one('loadeddata', () => {
-                        console.log('🎵 Audio tracks should be loaded now, reconfiguring...');
+                        console.log('🎵 Audio tracks should be loaded now, ensuring they are available...');
                         
-                        // Wait for HLS audio tracks to be available
-                        waitForHLSAudioTracks(player, (hls) => {
-                            if (hls) {
-                                console.log('✅ HLS audio tracks configured successfully');
-                                // Also configure subtitle tracks
-                                configureVideoJsTracks(player, audioTracks, subtitleTracks);
-                            } else {
-                                console.log('⚠️ Falling back to manual track configuration');
-                                configureVideoJsTracks(player, audioTracks, subtitleTracks);
-                            }
-                        });
+                        // Just log the current state, don't reconfigure to avoid conflicts
+                        const currentAudioTracks = player.audioTracks();
+                        console.log(`🎵 Video.js audio tracks after loadeddata: ${currentAudioTracks.length}`);
+                        
+                        if (currentAudioTracks.length === 0 && audioTracks && audioTracks.length > 0) {
+                            console.log('🎵 No audio tracks found, configuring them now...');
+                            configureAudioTracksOnly(player, audioTracks);
+                        }
                     });
                     
                     // Listen for audio track changes
@@ -161,17 +158,17 @@
                 } else {
                     console.log('⚠️ No track data available, showing buttons anyway');
                 }
-                
+                    
                 // Always show audio button regardless of track status
-                showAudioTracksButton(player);
-                
+                        showAudioTracksButton(player);
+                    
                 // Always show subtitle button regardless of track status
-                showSubtitlesButton(player);
-                
-                // Clean up when player is disposed
-                player.one('dispose', () => {
-                    stopAudioTrackEnforcement();
-                });
+                        showSubtitlesButton(player);
+                    
+                    // Clean up when player is disposed
+                    player.one('dispose', () => {
+                        stopAudioTrackEnforcement();
+                    });
             }
         }, 500);
         
@@ -367,34 +364,34 @@
         
         if (audioTracks.length > 0) {
             audioTracks.forEach((track, index) => {
-                const menuItem = document.createElement('div');
-                menuItem.className = 'audio-menu-item';
-                menuItem.textContent = track.label;
-                menuItem.style.cssText = `
-                    padding: 10px 16px;
-                    color: #ffffff;
-                    cursor: pointer;
-                    font-size: 14px;
-                    line-height: 1.4;
-                    transition: background-color 0.2s ease;
-                    border-bottom: none;
-                `;
-                
-                menuItem.addEventListener('mouseenter', () => {
-                    menuItem.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                });
-                
-                menuItem.addEventListener('mouseleave', () => {
-                    menuItem.style.backgroundColor = 'transparent';
-                });
-                
-                menuItem.addEventListener('click', () => {
-                    switchToAudioTrack(index, track);
-                    audioMenu.style.display = 'none';
-                });
-                
-                audioMenu.appendChild(menuItem);
+            const menuItem = document.createElement('div');
+            menuItem.className = 'audio-menu-item';
+            menuItem.textContent = track.label;
+            menuItem.style.cssText = `
+                padding: 10px 16px;
+                color: #ffffff;
+                cursor: pointer;
+                font-size: 14px;
+                line-height: 1.4;
+                transition: background-color 0.2s ease;
+                border-bottom: none;
+            `;
+            
+            menuItem.addEventListener('mouseenter', () => {
+                menuItem.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
             });
+            
+            menuItem.addEventListener('mouseleave', () => {
+                menuItem.style.backgroundColor = 'transparent';
+            });
+            
+            menuItem.addEventListener('click', () => {
+                switchToAudioTrack(index, track);
+                audioMenu.style.display = 'none';
+            });
+            
+            audioMenu.appendChild(menuItem);
+        });
         } else {
             // Show "No audio tracks available" message
             const menuItem = document.createElement('div');
@@ -542,17 +539,8 @@
         console.log('Track Buttons Enabler: Audio button element:', audioButton);
         console.log('Track Buttons Enabler: Audio button has click listener:', audioButton.onclick !== null);
         
-        // Test if button is actually clickable
-        setTimeout(() => {
-            console.log('Track Buttons Enabler: Testing audio button clickability...');
-            const testEvent = new MouseEvent('click', {
-                bubbles: true,
-                cancelable: true,
-                view: window
-            });
-            console.log('Track Buttons Enabler: Dispatching test click on audio button');
-            audioButton.dispatchEvent(testEvent);
-        }, 1000);
+        // Audio button is ready - no automatic testing needed
+        console.log('Track Buttons Enabler: Audio button is ready for user interaction');
     }
     
     function addCustomSubtitlesButton(player) {
@@ -669,34 +657,34 @@
         
         if (subtitleTracks.length > 0) {
             subtitleTracks.forEach((track, index) => {
-                const menuItem = document.createElement('div');
-                menuItem.className = 'subtitle-menu-item';
-                menuItem.textContent = track.label;
-                menuItem.style.cssText = `
-                    padding: 10px 16px;
-                    color: #ffffff;
-                    cursor: pointer;
-                    font-size: 14px;
-                    line-height: 1.4;
-                    transition: background-color 0.2s ease;
-                    border-bottom: none;
-                `;
-                
-                menuItem.addEventListener('mouseenter', () => {
-                    menuItem.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                });
-                
-                menuItem.addEventListener('mouseleave', () => {
-                    menuItem.style.backgroundColor = 'transparent';
-                });
-                
-                menuItem.addEventListener('click', () => {
-                    switchToSubtitleTrack(index, track);
-                    subtitleMenu.style.display = 'none';
-                });
-                
-                subtitleMenu.appendChild(menuItem);
+            const menuItem = document.createElement('div');
+            menuItem.className = 'subtitle-menu-item';
+            menuItem.textContent = track.label;
+            menuItem.style.cssText = `
+                padding: 10px 16px;
+                color: #ffffff;
+                cursor: pointer;
+                font-size: 14px;
+                line-height: 1.4;
+                transition: background-color 0.2s ease;
+                border-bottom: none;
+            `;
+            
+            menuItem.addEventListener('mouseenter', () => {
+                menuItem.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
             });
+            
+            menuItem.addEventListener('mouseleave', () => {
+                menuItem.style.backgroundColor = 'transparent';
+            });
+            
+            menuItem.addEventListener('click', () => {
+                switchToSubtitleTrack(index, track);
+                subtitleMenu.style.display = 'none';
+            });
+            
+            subtitleMenu.appendChild(menuItem);
+        });
         } else {
             // Show "No subtitle tracks available" message
             const menuItem = document.createElement('div');
@@ -1039,9 +1027,11 @@
                         console.log('❌ Master playlist not accessible:', error.message);
                         console.log('🔄 Skipping master playlist switch, using current source...');
                         // Don't switch to master playlist if it's not accessible
-                        // Just configure tracks with current source
+                        // Just configure audio tracks with current source, preserve subtitles
                         setTimeout(() => {
-                            configureVideoJsTracks();
+                            if (window.MediaCMS && window.MediaCMS.trackData && window.MediaCMS.trackData.audioTracks) {
+                                configureAudioTracksOnly(player, window.MediaCMS.trackData.audioTracks);
+                            }
                         }, 1000);
                     });
                 
@@ -1082,70 +1072,8 @@
     }
 
     // HLS Audio Track Detection and Configuration
-    function waitForHLSAudioTracks(player, callback) {
-        console.log('🎯 Waiting for HLS audio tracks to be available...');
-        
-        let attempts = 0;
-        const maxAttempts = 20;
-        const interval = setInterval(() => {
-            attempts++;
-            console.log(`🔍 Checking for HLS audio tracks (attempt ${attempts}/${maxAttempts})...`);
-            
-            const tech = player.tech();
-            let hls = null;
-            
-            // Try to get HLS instance
-            if (tech.vhs && tech.vhs.hls) {
-                hls = tech.vhs.hls;
-            } else if (tech.hls) {
-                hls = tech.hls;
-            } else if (tech.vhs && tech.vhs.masterPlaylistController_ && tech.vhs.masterPlaylistController_.hls_) {
-                hls = tech.vhs.masterPlaylistController_.hls_;
-            }
-            
-            if (hls && hls.audioTracks && hls.audioTracks.length > 0) {
-                console.log(`✅ HLS audio tracks found: ${hls.audioTracks.length}`);
-                clearInterval(interval);
-                
-                // Create Video.js audio tracks based on HLS audio tracks
-                const videoJsAudioTracks = player.audioTracks();
-                console.log('Current Video.js audio tracks:', videoJsAudioTracks.length);
-                
-                // Clear existing tracks
-                while (videoJsAudioTracks.length > 0) {
-                    videoJsAudioTracks.removeTrack(videoJsAudioTracks[0]);
-                }
-                
-                // Add each HLS audio track to Video.js
-                hls.audioTracks.forEach((hlsTrack, index) => {
-                    const audioTrack = new window.videojs.AudioTrack({
-                        id: hlsTrack.id || `audio-${index}`,
-                        kind: 'main',
-                        label: hlsTrack.name || `Track ${index + 1}`,
-                        language: hlsTrack.lang || '',
-                        enabled: hlsTrack.enabled || index === 0
-                    });
-                    
-                    videoJsAudioTracks.addTrack(audioTrack);
-                    console.log(`Added audio track: ${audioTrack.label} (${audioTrack.language})`);
-                });
-                
-                console.log('Final Video.js audio tracks:', videoJsAudioTracks.length);
-                
-                // Trigger change event
-                videoJsAudioTracks.trigger('change');
-                
-                if (callback) callback(hls);
-                        return;
-                    }
-            
-            if (attempts >= maxAttempts) {
-                console.log('⚠️ HLS audio tracks not found after maximum attempts');
-                clearInterval(interval);
-                if (callback) callback(null);
-            }
-        }, 500);
-    }
+    // HLS audio track waiting function removed - it was blocking audio switching
+    // Audio tracks are now handled directly without waiting for HLS
 
     // Track switching functions
     // Direct HLS audio track switching with source manipulation
@@ -1159,20 +1087,19 @@
         }
         
         try {
+            // Temporarily stop audio track enforcement to prevent conflicts
+            const wasEnforcementActive = audioTrackEnforcementInterval !== null;
+            if (wasEnforcementActive) {
+                stopAudioTrackEnforcement();
+                console.log('⏸️ Temporarily stopped audio track enforcement during manual switching');
+            }
+            
             // Store current state
             const currentTime = player.currentTime();
             const wasPlaying = !player.paused();
             
-            // Store current subtitle track state
-            const textTracks = player.textTracks();
-            let activeSubtitleTrack = null;
-            for (let i = 0; i < textTracks.length; i++) {
-                if (textTracks[i].mode === 'showing') {
-                    activeSubtitleTrack = i;
-                    break;
-                }
-            }
-            console.log(`📝 Current subtitle track: ${activeSubtitleTrack !== null ? activeSubtitleTrack : 'none'}`);
+            // Audio track switching should be completely independent of subtitles
+            console.log(`🎵 Switching audio track independently of subtitles`);
             
             // Get the base URL from current source
             const currentSrc = player.src();
@@ -1206,10 +1133,15 @@
             // Try different ways to access HLS instance
             if (tech.vhs && tech.vhs.hls) {
                 hls = tech.vhs.hls;
+                console.log('✅ Found HLS via tech.vhs.hls');
             } else if (tech.hls) {
                 hls = tech.hls;
+                console.log('✅ Found HLS via tech.hls');
             } else if (tech.vhs && tech.vhs.masterPlaylistController_ && tech.vhs.masterPlaylistController_.hls_) {
                 hls = tech.vhs.masterPlaylistController_.hls_;
+                console.log('✅ Found HLS via masterPlaylistController');
+            } else {
+                console.log('⚠️ HLS instance not found, will use Video.js fallback');
             }
             
             if (hls && hls.audioTracks && hls.audioTracks.length > 0) {
@@ -1235,82 +1167,113 @@
                     // Force HLS to reload
                     hls.startLoad();
                     
-                    selectedAudioTrackIndex = trackIndex;
-                    console.log(`✅ Successfully switched HLS audio track to: ${track.label}`);
-                    
-                    // Restore subtitle track if it was active
+                selectedAudioTrackIndex = trackIndex;
+                console.log(`✅ Successfully switched HLS audio track to: ${track.label}`);
+                
+                // Restart audio track enforcement if it was active
+                if (wasEnforcementActive) {
                     setTimeout(() => {
-                        restoreSubtitleTrack(player, activeSubtitleTrack);
-                    }, 500);
-                    
-                    return true;
+                        startAudioTrackEnforcement(player);
+                        console.log('▶️ Restarted audio track enforcement after HLS switching');
+                    }, 1000);
+                }
+                
+                return true;
                 }
             }
             
-            // Fallback: Create a modified master playlist URL with the selected audio track
-            console.log('⚠️ HLS audio tracks not available, using source switching fallback');
-            const baseUrl = currentSrc.replace('/master.m3u8', '');
-            const audioTrackUrl = baseUrl + '/' + selectedTrack.src.split('/').pop();
+            // Fallback: Use Video.js audio track switching instead of source switching
+            console.log('⚠️ HLS audio tracks not available, using Video.js audio track switching');
             
-            console.log(`🔄 Switching to audio track URL: ${audioTrackUrl}`);
+            // Get Video.js audio tracks
+            const videoJsAudioTracks = player.audioTracks();
+            console.log(`📊 Video.js audio tracks available: ${videoJsAudioTracks ? videoJsAudioTracks.length : 0}`);
             
-            // Switch to the audio track playlist directly
-            player.src(audioTrackUrl);
-            
-            // Restore state after a delay
-            setTimeout(() => {
-                if (currentTime > 0) {
-                    player.currentTime(currentTime);
+            if (videoJsAudioTracks && videoJsAudioTracks.length > trackIndex) {
+                // Disable all audio tracks first
+                for (let i = 0; i < videoJsAudioTracks.length; i++) {
+                    videoJsAudioTracks[i].enabled = false;
                 }
-                if (wasPlaying) {
-                    player.play().catch(e => console.log('Auto-play prevented:', e));
-                }
+                
+                // Enable the target track
+                videoJsAudioTracks[trackIndex].enabled = true;
+                
+                // Force a change event to ensure the switch is registered
+                videoJsAudioTracks.trigger('change');
                 
                 selectedAudioTrackIndex = trackIndex;
-                console.log(`✅ Successfully switched to audio track: ${track.label}`);
+                console.log(`✅ Successfully switched Video.js audio track to: ${track.label}`);
                 
-                // Restore subtitle track if it was active
+                // Force a small seek to trigger audio reload
+                const currentTime = player.currentTime();
+                const seekTime = currentTime + 0.1;
+                player.currentTime(seekTime);
+                
                 setTimeout(() => {
-                    restoreSubtitleTrack(player, activeSubtitleTrack);
-                }, 1000);
-            }, 1000);
+                    player.currentTime(currentTime);
+                    console.log(`⏱️ Restored to original time: ${currentTime}`);
+                }, 100);
+                
+                // Restart audio track enforcement if it was active
+                if (wasEnforcementActive) {
+                    setTimeout(() => {
+                        startAudioTrackEnforcement(player);
+                        console.log('▶️ Restarted audio track enforcement after Video.js switching');
+                    }, 1000);
+                }
+                
+                return true;
+            }
             
-            return true;
+            console.log('❌ Video.js audio tracks not available, cannot switch audio');
+            console.log('🔍 Available tracks:', videoJsAudioTracks ? videoJsAudioTracks.length : 0);
+            return false;
             
         } catch (error) {
             console.log('❌ Error in direct audio track switching:', error);
+            
+            // Restart audio track enforcement if it was active (error case)
+            if (wasEnforcementActive) {
+                setTimeout(() => {
+                    startAudioTrackEnforcement(player);
+                    console.log('▶️ Restarted audio track enforcement after switching error');
+                }, 1000);
+            }
+            
             return false;
         }
     }
     
+    // Audio and subtitles are now completely independent - no restoration needed
+    
     function switchToAudioTrack(trackIndex, track) {
         console.log(`🎵 SWITCHING AUDIO TRACK: ${trackIndex} ${track.label}`);
         
-        // Try direct HLS switching first
-        if (switchToAudioTrackDirect(trackIndex, track)) {
-            showAudioTrackChangeMessage(window.videojs.getPlayer('vjs_video_3'), track.label);
-                                return;
-                            }
-                            
-        console.log('⚠️ Direct switching failed, trying fallback methods...');
-        
-        // Get player
-        let player = null;
-        try {
-            player = window.videojs.getPlayer('vjs_video_3');
-        } catch (e) {
-            const players = window.videojs.getPlayers();
-            const playerIds = Object.keys(players);
-            if (playerIds.length > 0) {
-                player = players[playerIds[0]];
-            }
+        // Get player first to check track availability
+        const player = window.videojs.getPlayer('vjs_video_3');
+        if (!player) {
+            console.error('❌ No player found for audio track switching');
+            return;
         }
         
-        if (!player) {
-            console.error('❌ No player found');
-                                return;
-                            }
-                            
+        // Debug current audio tracks
+        const currentAudioTracks = player.audioTracks();
+        console.log(`🎵 Current Video.js audio tracks: ${currentAudioTracks.length}`);
+        for (let i = 0; i < currentAudioTracks.length; i++) {
+            const track = currentAudioTracks[i];
+            console.log(`  Track ${i}: ${track.label} (enabled: ${track.enabled})`);
+        }
+        
+        // Try direct HLS switching first
+        if (switchToAudioTrackDirect(trackIndex, track)) {
+            showAudioTrackChangeMessage(player, track.label);
+            return;
+        }
+        
+        console.log('⚠️ Direct switching failed, trying fallback methods...');
+        
+        // Player is already available from above, no need for additional checks
+        
         try {
             console.log('🎵 Attempting HLS audio track switching...');
             
@@ -1318,6 +1281,9 @@
             const currentTime = player.currentTime();
             const wasPlaying = !player.paused();
             console.log(`⏱️ Current state - time: ${currentTime}, playing: ${wasPlaying}`);
+            
+            // Audio track switching should be completely independent of subtitles
+            console.log(`🎵 Switching audio track independently of subtitles`);
             
             // Method 1: Direct HLS.js audio track manipulation
             console.log('🎯 Method 1: Direct HLS.js audio track manipulation...');
@@ -1390,58 +1356,8 @@
             } else {
                 console.log('⚠️ No HLS audio tracks available, trying Video.js fallback...');
                 
-                // Try to wait for HLS audio tracks
-                waitForHLSAudioTracks(player, (hls) => {
-                    if (hls && hls.audioTracks && hls.audioTracks.length > trackIndex) {
-                        console.log(`🎯 HLS audio tracks now available: ${hls.audioTracks.length}`);
-                        
-                        // Disable all audio tracks first
-                        for (let i = 0; i < hls.audioTracks.length; i++) {
-                            hls.audioTracks[i].enabled = false;
-                        }
-                        
-                        // Enable the target track
-                        hls.audioTracks[trackIndex].enabled = true;
-                        console.log(`✅ Enabled HLS audio track ${trackIndex}: ${track.label}`);
-                        
-                        // Trigger HLS audio track switched event
-                        if (hls.trigger) {
-                            hls.trigger('hlsAudioTrackSwitched', {
-                                id: trackIndex,
-                                name: track.label,
-                                groupId: 'audio'
-                            });
-                        }
-                        
-                        // Force HLS to reload segments
-                        if (hls.startLoad) {
-                            hls.startLoad();
-                        }
-                        
-                        // Force a seek to trigger audio reload
-                        console.log('🎯 Forcing seek to trigger audio track change...');
-                        const seekTime = currentTime + 0.1;
-                        player.currentTime(seekTime);
-                        
-                        setTimeout(() => {
-                            player.currentTime(currentTime);
-                            console.log(`⏱️ Restored to original time: ${currentTime}`);
-                            
-                            // Resume playback if it was playing
-                            if (wasPlaying) {
-                                setTimeout(() => {
-                                    player.play().catch(e => console.log('Auto-play prevented:', e));
-                                }, 200);
-                            }
-                        }, 300);
-                        
-                        // Show success message
-                        showAudioTrackChangeMessage(player, track.label);
-                        return;
-                    } else {
-                        console.log('⚠️ Still no HLS audio tracks available, trying Video.js fallback...');
-                    }
-                });
+                // Skip HLS waiting and go directly to Video.js fallback
+                console.log('⚠️ Skipping HLS waiting, using Video.js fallback directly...');
             }
             
             // Method 2: Video.js Audio Track API fallback
@@ -1502,19 +1418,18 @@
         }
     }
     
-    // Helper function to restore subtitles after audio track switching
-    function restoreSubtitleTrack(player, activeSubtitleTrack) {
-        if (activeSubtitleTrack !== null) {
-            console.log(`📝 Restoring subtitle track: ${activeSubtitleTrack}`);
-            const textTracks = player.textTracks();
-            if (textTracks[activeSubtitleTrack]) {
-                textTracks[activeSubtitleTrack].mode = 'showing';
-            }
-        }
-    }
+    // Subtitles and audio tracks are now completely independent
+    // No restoration function needed
     
     function switchToSubtitleTrack(trackIndex, track) {
         console.log('Switching to subtitle track:', trackIndex, track);
+        
+        // Temporarily stop audio track enforcement to prevent conflicts
+        const wasEnforcementActive = audioTrackEnforcementInterval !== null;
+        if (wasEnforcementActive) {
+            stopAudioTrackEnforcement();
+            console.log('⏸️ Temporarily stopped audio track enforcement during subtitle switching');
+        }
         
         // Get the player - try multiple methods
         let player = null;
@@ -1582,6 +1497,18 @@
                         const track = textTracks[i];
                         if (track.kind === 'subtitles' || track.kind === 'captions') {
                             if (subtitleTrackIndex === trackIndex) {
+                                // Ensure the track has a proper src URL
+                                if (!track.src || track.src === undefined) {
+                                    // Try to get the src from the track data
+                                    if (window.MediaCMS && window.MediaCMS.trackData && window.MediaCMS.trackData.subtitleTracks) {
+                                        const trackData = window.MediaCMS.trackData.subtitleTracks[trackIndex];
+                                        if (trackData && trackData.src) {
+                                            track.src = trackData.src;
+                                            console.log(`📝 Restored subtitle track src: ${track.src}`);
+                                        }
+                                    }
+                                }
+                                
                                 track.mode = 'showing';
                                 console.log('✅ Subtitle track enabled:', track.label, track.language);
                                 
@@ -1596,13 +1523,30 @@
                                     cues: track.cues?.length || 0
                                 });
                                 
-                                // Check if track has cues after a delay
+                                // Check if track has cues after a delay and wait for loading
                                 setTimeout(() => {
                                     console.log(`📝 Track ${trackIndex} cues after delay:`, track.cues?.length || 0);
                                     if (track.cues && track.cues.length > 0) {
                                         console.log(`📝 First cue:`, track.cues[0].text);
                                     } else {
-                                        console.log('⚠️ No cues found in subtitle track');
+                                        console.log('⚠️ No cues found in subtitle track, waiting for loading...');
+                                        
+                                        // Wait for cues to load if they're not available yet
+                                        let attempts = 0;
+                                        const maxAttempts = 10;
+                                        const checkInterval = setInterval(() => {
+                                            attempts++;
+                                            console.log(`📝 Checking for cues (attempt ${attempts}/${maxAttempts}):`, track.cues?.length || 0);
+                                            
+                                            if (track.cues && track.cues.length > 0) {
+                                                console.log(`📝 Cues loaded successfully:`, track.cues.length);
+                                                console.log(`📝 First cue:`, track.cues[0].text);
+                                                clearInterval(checkInterval);
+                                            } else if (attempts >= maxAttempts) {
+                                                console.log('⚠️ Cues still not loaded after maximum attempts');
+                                                clearInterval(checkInterval);
+                                            }
+                                        }, 500);
                                     }
                                 }, 1000);
                                 
@@ -1616,10 +1560,29 @@
                 }
                 
                 console.log('Subtitle switching completed for track:', track ? track.label : 'Off');
+                
+                // Restart audio track enforcement if it was active
+                if (wasEnforcementActive && player) {
+                    setTimeout(() => {
+                        startAudioTrackEnforcement(player);
+                        console.log('▶️ Restarted audio track enforcement after subtitle switching');
+                    }, 1000);
+                }
             }
             
         } catch (error) {
             console.error('Error switching subtitle track:', error);
+            
+            // Restart audio track enforcement if it was active (error case)
+            if (wasEnforcementActive) {
+                const player = window.videojs.getPlayer('vjs_video_3');
+                if (player) {
+                    setTimeout(() => {
+                        startAudioTrackEnforcement(player);
+                        console.log('▶️ Restarted audio track enforcement after subtitle switching error');
+                    }, 1000);
+                }
+            }
         }
     }
     
@@ -1717,6 +1680,56 @@
             console.log('Track configuration complete');
             console.log('Audio tracks available:', player.audioTracks().length);
             console.log('Text tracks available:', player.textTracks().length);
+        }, 1000);
+    }
+
+    // Configure audio tracks independently of subtitles
+    function configureAudioTracksOnly(player, audioTracks) {
+        // Audio track configuration should be completely independent of subtitles
+        console.log(`🎵 Configuring audio tracks independently of subtitles`);
+        
+        // Add audio tracks to Video.js
+        if (audioTracks && audioTracks.length > 0) {
+            const videoJsAudioTracks = player.audioTracks();
+            console.log('Current Video.js audio tracks:', videoJsAudioTracks.length);
+            
+            // Clear existing audio tracks only
+            while (videoJsAudioTracks.length > 0) {
+                videoJsAudioTracks.removeTrack(videoJsAudioTracks[0]);
+            }
+            
+            // Add each audio track
+            audioTracks.forEach((track, index) => {
+                const audioTrack = new window.videojs.AudioTrack({
+                    id: track.label || `audio-${index}`,
+                    kind: index === 0 ? 'main' : 'alternative',
+                    label: track.label,
+                    language: track.srclang || '',
+                    enabled: index === 0
+                });
+                
+                videoJsAudioTracks.addTrack(audioTrack);
+                console.log(`Added audio track: ${track.label} (${track.srclang})`);
+            });
+            
+            console.log('Final Video.js audio tracks:', videoJsAudioTracks.length);
+            console.log('Audio tracks configured independently of subtitles');
+            
+            // Force Video.js to recognize the audio tracks by triggering a track change event
+            setTimeout(() => {
+                if (videoJsAudioTracks.length > 0) {
+                    console.log('Triggering audio track change event to activate tracks');
+                    videoJsAudioTracks.trigger('change');
+                }
+            }, 500);
+        }
+        
+        // Audio tracks are now completely independent of subtitles
+        
+        // Wait a bit for tracks to be processed
+        setTimeout(() => {
+            console.log('Audio track configuration complete');
+            console.log('Audio tracks available:', player.audioTracks().length);
         }, 1000);
     }
     

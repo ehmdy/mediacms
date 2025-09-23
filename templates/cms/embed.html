@@ -10,4 +10,135 @@
 
 {% block bottomimports %}
     <script src="{% static "js/embed.js" %}?v={{ VERSION }}"></script>
+    
+    <!-- Track switching enabler for embedded videos -->
+    <script type="text/javascript">
+        console.log('Embed Track Buttons: Script loaded');
+        
+        // Get media ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const mediaId = urlParams.get('m');
+        console.log('Embed Track Buttons: Media ID:', mediaId);
+        
+        if (mediaId) {
+            // Set up MediaCMS object early
+            window.MediaCMS = window.MediaCMS || {};
+            window.MediaCMS.mediaId = mediaId;
+            
+            // Function to initialize track buttons
+            function initializeTrackButtons() {
+                console.log('Embed Track Buttons: Initializing...');
+                
+                // Multiple attempts to find the video player and get track data
+                let attempts = 0;
+                const maxAttempts = 30;
+                
+                const checkInterval = setInterval(() => {
+                    attempts++;
+                    console.log(`Embed Track Buttons: Attempt ${attempts}/${maxAttempts}`);
+                    
+                    // Look for the video player
+                    const videoPlayer = document.querySelector('video');
+                    const playerContainer = document.querySelector('.video-js, .vjs-mediacms');
+                    
+                    if (videoPlayer || playerContainer) {
+                        console.log('Embed Track Buttons: Video player found');
+                        
+                        // Try multiple API endpoints
+                        const apiUrls = [
+                            `/api/v1/media/${mediaId}/`,
+                            `/api/media/${mediaId}/`,
+                            `/media_api/${mediaId}/`
+                        ];
+                        
+                        // Try each API endpoint
+                        tryApiEndpoints(apiUrls, 0);
+                        clearInterval(checkInterval);
+                    } else if (attempts >= maxAttempts) {
+                        console.log('Embed Track Buttons: Max attempts reached, stopping');
+                        clearInterval(checkInterval);
+                    }
+                }, 1000);
+            }
+            
+            function tryApiEndpoints(urls, index) {
+                if (index >= urls.length) {
+                    console.log('Embed Track Buttons: All API endpoints failed, trying direct approach');
+                    // Fallback: try to get data from window context or create dummy data
+                    setupDummyTrackData();
+                    return;
+                }
+                
+                const url = urls[index];
+                console.log('Embed Track Buttons: Trying API:', url);
+                
+                fetch(url)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Embed Track Buttons: API success:', data);
+                        
+                        // Set up track data
+                        window.MediaCMS.trackData = {
+                            audioTracks: data.hls_audio_tracks_info || [],
+                            subtitleTracks: data.hls_subtitles_info || []
+                        };
+                        
+                        console.log('Embed Track Buttons: Track data set:', window.MediaCMS.trackData);
+                        
+                        // Load the track buttons script
+                        loadTrackButtonsScript();
+                    })
+                    .catch(error => {
+                        console.log(`Embed Track Buttons: API ${url} failed:`, error);
+                        // Try next endpoint
+                        tryApiEndpoints(urls, index + 1);
+                    });
+            }
+            
+            function setupDummyTrackData() {
+                // For testing - create some dummy track data
+                console.log('Embed Track Buttons: Setting up dummy track data for testing');
+                window.MediaCMS.trackData = {
+                    audioTracks: [
+                        {src: '/media/hls/test/audio_0.m4a', srclang: 'eng', label: 'English'},
+                        {src: '/media/hls/test/audio_1.m4a', srclang: 'ara', label: 'Arabic'},
+                        {src: '/media/hls/test/audio_2.m4a', srclang: 'fre', label: 'French'}
+                    ],
+                    subtitleTracks: [
+                        {src: '/media/hls/test/subtitle_0.vtt', srclang: 'ara', label: 'Arabic'},
+                        {src: '/media/hls/test/subtitle_1.vtt', srclang: 'eng', label: 'English'},
+                        {src: '/media/hls/test/subtitle_2.vtt', srclang: 'fre', label: 'French'}
+                    ]
+                };
+                loadTrackButtonsScript();
+            }
+            
+            function loadTrackButtonsScript() {
+                console.log('Embed Track Buttons: Loading track buttons script');
+                const script = document.createElement('script');
+                script.src = "{% static "js/track-buttons-enabler.js" %}?v={{ VERSION }}";
+                script.onload = () => {
+                    console.log('Embed Track Buttons: Track buttons script loaded successfully');
+                };
+                script.onerror = () => {
+                    console.error('Embed Track Buttons: Failed to load track buttons script');
+                };
+                document.head.appendChild(script);
+            }
+            
+            // Start initialization when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeTrackButtons);
+            } else {
+                initializeTrackButtons();
+            }
+        } else {
+            console.log('Embed Track Buttons: No media ID found in URL');
+        }
+    </script>
 {% endblock bottomimports %}

@@ -5,6 +5,8 @@ from django.conf.urls.static import static
 from django.urls import path, re_path
 
 from . import management_views, views
+from .views.track_switching import TrackSwitchingView
+from .views.audio_track_switching import AudioTrackSwitchingView
 from .feeds import IndexRSSFeed, SearchRSSFeed
 
 friendly_token = r"(?P<friendly_token>[\w\-_]*)"
@@ -61,6 +63,16 @@ urlpatterns = [
         name="api_get_media",
     ),
     re_path(
+        rf"^api/v1/media/{friendly_token}/switch-tracks$",
+        TrackSwitchingView.as_view(),
+        name="api_switch_tracks",
+    ),
+    re_path(
+        rf"^api/v1/media/{friendly_token}/audio-track$",
+        AudioTrackSwitchingView.as_view(),
+        name="api_audio_track_switching",
+    ),
+    re_path(
         r"^api/v1/media/encoding/(?P<encoding_id>[\w]*)$",
         views.EncodingDetail.as_view(),
         name="api_get_encoding",
@@ -108,6 +120,8 @@ urlpatterns = [
     re_path(r"^manage/comments$", views.manage_comments, name="manage_comments"),
     re_path(r"^manage/media$", views.manage_media, name="manage_media"),
     re_path(r"^manage/users$", views.manage_users, name="manage_users"),
+    # Custom media file serving for HLS files
+    re_path(r"^media/(?P<path>.*)$", views.serve_media_file, name="serve_media_file"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 if settings.USERS_NEEDS_TO_BE_APPROVED:

@@ -142,4 +142,16 @@
 
 {% block bottomimports %}
     <script src="{% static "js/media.js" %}?v={{ VERSION }}"></script>
+    
+    <!-- Track switching enabler -->
+    <script type="text/javascript">
+        // Provide track data to JavaScript
+        window.MediaCMS = window.MediaCMS || {};
+        window.MediaCMS.trackData = {
+            audioTracks: {{media_object.hls_audio_tracks_info|safe}},
+            subtitleTracks: {{media_object.hls_subtitles_info|safe}}
+        };
+    </script>
+    <script src="{% static "js/track-buttons-enabler.js" %}?v={{ VERSION }}"></script>
 {% endblock bottomimports %}
+    

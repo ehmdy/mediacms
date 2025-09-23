@@ -526,6 +526,127 @@ function generatePlugin() {
 				}
 
 				break;
+			case '__audioTracks':
+				struct.audioTracksPanel = {
+					children: {
+						audioTracksPanelInner: {
+							children: {
+								audioTracksMenuTitle: null,
+								audioTracksMenu: { children: {} },
+							},
+						},
+					},
+				};
+
+				tmp = composeCustomComp(__SettingsPanelComponent__, 'vjs-audio-tracks-panel');
+
+				tmp.methods.constructor = function () {
+					videojsComponent.apply(this, arguments);
+
+					this.setAttribute('class', this.buildCSSClass());
+
+					const that = this;
+
+					function onFocusout(ev) {
+						if (that.el_.contains(ev.relatedTarget)) {
+							return;
+						}
+						that.player_.trigger('focusoutAudioTracksPanel');
+					}
+
+					pluginInstanceRef.on(this.player_, ['updatedAudioTracksPanelsVisibility'], function () {
+						videojs.dom[this.state.isOpenAudioTracksOptions ? 'addClass' : 'removeClass'](that.el_, 'vjs-visible-panel');
+					});
+
+					pluginInstanceRef.on(this.player_, ['openedAudioTracksPanel'], function (ev, openedFromKeyboard) {
+						that.el_.setAttribute('tabindex', '-1');
+						that.el_.addEventListener('focusout', onFocusout);
+						if (!!openedFromKeyboard) {
+							that.el_.querySelector('.vjs-settings-menu-item').focus();
+						} else {
+							that.el_.focus();
+						}
+					});
+
+					pluginInstanceRef.on(this.player_, ['closedAudioTracksPanel'], function (ev, closedFromKeyboard) {
+						that.el_.removeAttribute('tabindex');
+						that.el_.removeEventListener('focusout', onFocusout);
+						if (!!closedFromKeyboard) {
+							that.el_.querySelector('.vjs-settings-menu-item').focus();
+						}
+					});
+				};
+
+				videojs.registerComponent('AudioTracksPanel', videojs.extend(tmp.extend, tmp.methods));
+
+				videojs.registerComponent(
+					'AudioTracksPanelInner',
+					videojs.extend(__SettingsPanelInnerComponent__, composeCustomComp(__SettingsPanelInnerComponent__).methods)
+				);
+
+				videojs.registerComponent(
+					'AudioTracksMenu',
+					videojs.extend(__SettingsMenuComponent__, composeCustomComp(__SettingsMenuComponent__).methods)
+				);
+				videojs.registerComponent(
+					'AudioTracksMenuTitle',
+					videojs.extend(
+						__SettingsPanelTitleComponent__,
+						composeCustomComp(__SettingsPanelTitleComponent__, null, '<span>Audio Tracks</span>').methods
+					)
+				);
+
+				i = 0;
+				while (i < args.options.audioTracks.languages.length) {
+					k = args.options.audioTracks.languages[i];
+
+					struct.audioTracksPanel.children.audioTracksPanelInner.children.audioTracksMenu.children['audioTrackOption_' + k.srclang] =
+						{
+							children: {
+								['audioTrackOption_' + k.srclang + '_content']: null,
+							},
+						};
+
+					(function (key, title) {
+						tmp = composeCustomComp(
+							__SettingsMenuItemComponent__,
+							key === pluginInstanceRef.state.theSelectedAudioTrackOption ? 'vjs-selected-menu-item' : null,
+							null
+						);
+
+						tmp.methods.constructor = function () {
+							__SettingsMenuItemComponent__.apply(this, arguments);
+
+							this.audioTrackKey = key;
+
+							const that = this;
+
+							this.setAttribute('data-opt', key);
+
+							pluginInstanceRef.on(this.player_, ['updatedSelectedAudioTrackOption'], function () {
+								if (that.audioTrackKey === this.state.theSelectedAudioTrackOption) {
+									videojs.dom.addClass(that.el_, 'vjs-selected-menu-item');
+								} else {
+									videojs.dom.removeClass(that.el_, 'vjs-selected-menu-item');
+								}
+							});
+						};
+
+						tmp.methods.handleClick = function () {
+							this.player_.trigger('selectedAudioTrackOption', this.el_.getAttribute('data-opt'));
+						};
+
+						videojs.registerComponent('AudioTrackOption_' + key, videojs.extend(tmp.extend, tmp.methods));
+
+						tmp = composeCustomComp(__SettingsMenuItemContentComponent__, null, title);
+
+						videojs.registerComponent('AudioTrackOption_' + key + '_content', videojs.extend(tmp.extend, tmp.methods));
+					})(k.srclang, k.label);
+
+					i += 1;
+				}
+
+				break;
 			case '__settings':
 				struct.settingsPanel = {
 					children: {
@@ -1021,6 +1142,10 @@ function generatePlugin() {
 					struct.rightControls.children.subtitlesToggle = null;
 				}
 
+				if (args.options.audioTracks) {
+					struct.rightControls.children.audioTracksToggle = null;
+				}
+
 				if (args.enabledSettingsPanel) {
 					struct.rightControls.children.settingsToggle = null;
 				}
@@ -1053,6 +1178,19 @@ function generatePlugin() {
 					};
 
 					videojs.registerComponent('SubtitlesToggle', videojs.extend(tmp.extend, tmp.methods));
+				}
+
+				if (args.options.audioTracks) {
+					tmp = composeCustomComp(videojsComponentButton, 'vjs-audio-tracks-control');
+
+					tmp.methods.handleClick = function (ev) {
+						this.player_.trigger(
+							pluginInstanceRef.state.isOpenAudioTracksOptions ? 'closeAudioTracksPanel' : 'openAudioTracksPanel',
+							!ev.screenX && !ev.screenY
+						);
+					};
+
+					videojs.registerComponent('AudioTracksToggle', videojs.extend(tmp.extend, tmp.methods));
 				}
 
 				if (args.enabledSettingsPanel) {
@@ -1120,6 +1258,10 @@ function generatePlugin() {
 			initComponents(pluginInstanceRef, '__subtitles', struct, { options: options });
 		}
 
+		if (options.audioTracks) {
+			initComponents(pluginInstanceRef, '__audioTracks', struct, { options: options });
+		}
+
 		if (enabledSettingsPanel) {
 			if (enabledResolutionsPanel && enabledPlaybackSpeedPanel) {
 				initComponents(pluginInstanceRef, '__settings', struct, {
@@ -1154,6 +1296,7 @@ function generatePlugin() {
 		if (
 			enabledSettingsPanel ||
 			options.subtitles ||
+			options.audioTracks ||
 			options.controlBar.theaterMode ||
 			options.controlBar.fullscreen ||
 			options.controlBar.pictureInPictureToggle
@@ -1789,6 +1932,7 @@ function generatePlugin() {
 
 			this.timeoutSettingsPanelFocusout = null;
 			this.timeoutSubtitlesPanelFocusout = null;
+			this.timeoutAudioTracksPanelFocusout = null;
 			this.timeoutResolutionsPanelFocusout = null;
 			this.timeoutPlaybackSpeedsPanelFocusout = null;
 
@@ -1869,6 +2013,23 @@ function generatePlugin() {
 
 			this.subtitles = options.subtitles;
 
+			// Set video audio tracks info.
+
+			if (void 0 !== state.theSelectedAudioTrackOption && null !== state.theSelectedAudioTrackOption) {
+				this.state.theSelectedAudioTrackOption = state.theSelectedAudioTrackOption;
+			}
+
+			if (
+				!!!options.audioTracks ||
+				!!!options.audioTracks.languages ||
+				!!!options.audioTracks.languages.length ||
+				!options.audioTracks.languages.length
+			) {
+				options.audioTracks = null;
+			}
+
+			this.audioTracks = options.audioTracks;
+
 			// Set player actions animations components.
 
 			setActionsAnimationsComponents(this, options, player);
@@ -1939,6 +2100,9 @@ function generatePlugin() {
 			this.on(player, ['openSubtitlesPanel'], this.openSubtitlesOptions);
 			this.on(player, ['closeSubtitlesPanel'], this.closeSubtitlesOptions);
 
+			this.on(player, ['openAudioTracksPanel'], this.openAudioTracksOptions);
+			this.on(player, ['closeAudioTracksPanel'], this.closeAudioTracksOptions);
+
 			this.on(player, ['openQualityOptions'], this.openQualityOptions);
 			this.on(player, ['closeQualityOptions'], this.closeQualityOptions);
 
@@ -1947,10 +2111,12 @@ function generatePlugin() {
 
 			this.on(player, ['selectedQuality'], this.onQualitySelection);
 			this.on(player, ['selectedSubtitleOption'], this.onSubtitleOptionSelection);
+			this.on(player, ['selectedAudioTrackOption'], this.onAudioTrackOptionSelection);
 			this.on(player, ['selectedPlaybackSpeed'], this.onPlaybackSpeedSelection);
 
 			this.on(player, ['focusoutSettingsPanel'], this.onFocusOutSettingsPanel);
 			this.on(player, ['focusoutSubtitlesPanel'], this.onFocusOutSubtitlesPanel);
+			this.on(player, ['focusoutAudioTracksPanel'], this.onFocusOutAudioTracksPanel);
 			this.on(player, ['focusoutResolutionsPanel'], this.onFocusOutResolutionsPanel);
 			this.on(player, ['focusoutPlaybackSpeedsPanel'], this.onFocusOutPlaybackSpeedsPanel);
 
@@ -2394,6 +2560,22 @@ function generatePlugin() {
 			}
 		}
 
+		changeVideoAudioTrack() {
+			// Handle audio track switching for HLS streams
+			if (this.player.tech_ && this.player.tech_.hls) {
+				const audioTracks = this.player.tech_.hls.audioTracks;
+				if (audioTracks && audioTracks.length > 0) {
+					for (let i = 0; i < audioTracks.length; i++) {
+						if (audioTracks[i].id === this.state.theSelectedAudioTrackOption) {
+							audioTracks[i].enabled = true;
+						} else {
+							audioTracks[i].enabled = false;
+						}
+					}
+				}
+			}
+		}
+
 		changeVideoResolution() {
 			this.isChangingResolution = true;
 
@@ -2474,6 +2656,12 @@ function generatePlugin() {
 				this.onPublicStateUpdate();
 			}
 
+			if (d.changes.theSelectedAudioTrackOption) {
+				this.changeVideoAudioTrack();
+				this.player.trigger('updatedSelectedAudioTrackOption');
+				this.onPublicStateUpdate();
+			}
+
 			if (d.changes.theSelectedQuality) {
 				this.changeVideoResolution();
 				this.player.trigger('updatedSelectedQuality');
@@ -2500,6 +2688,10 @@ function generatePlugin() {
 				this.player.trigger('updatedSubtitlesPanelsVisibility');
 			}
 
+			if (d.changes.isOpenAudioTracksOptions) {
+				this.player.trigger('updatedAudioTracksPanelsVisibility');
+			}
+
 			if (d.changes.openSettings) {
 				if (this.state.openSettings) {
 					this.player.trigger('openedSettingsPanel', this.state.openSettingsFromKeyboard);
@@ -2521,6 +2713,18 @@ function generatePlugin() {
 			if (d.changes.closeSubtitles) {
 				if (this.state.closeSubtitles) {
 					this.player.trigger('closedSubtitlesPanel', this.state.closeSubtitlesFromKeyboard);
+				}
+			}
+
+			if (d.changes.openAudioTracks) {
+				if (this.state.openAudioTracks) {
+					this.player.trigger('openedAudioTracksPanel', this.state.openAudioTracksFromKeyboard);
+				}
+			}
+
+			if (d.changes.closeAudioTracks) {
+				if (this.state.closeAudioTracks) {
+					this.player.trigger('closedAudioTracksPanel', this.state.closeAudioTracksFromKeyboard);
 				}
 			}
 
@@ -2678,6 +2882,30 @@ function generatePlugin() {
 			});
 		}
 
+		openAudioTracksOptions(ev, triggeredFromKeyboard) {
+			clearTimeout(this.timeoutAudioTracksPanelFocusout);
+
+			this.setState({
+				openAudioTracks: new Date(),
+				openAudioTracksFromKeyboard: triggeredFromKeyboard ? new Date() : !1,
+				isOpenAudioTracksOptions: !0,
+				isOpenSettingsOptions: !1,
+				isOpenQualityOptions: !1,
+				isOpenPlaybackSpeedOptions: !1,
+				isOpenSubtitlesOptions: !1,
+			});
+		}
+
+		closeAudioTracksOptions(ev, triggeredFromKeyboard) {
+			clearTimeout(this.timeoutAudioTracksPanelFocusout);
+
+			this.setState({
+				closeAudioTracks: new Date(),
+				closeAudioTracksFromKeyboard: triggeredFromKeyboard ? new Date() : !1,
+				isOpenAudioTracksOptions: !1,
+			});
+		}
+
 		openQualityOptions(ev, triggeredFromKeyboard) {
 			clearTimeout(this.timeoutResolutionsPanelFocusout);
 
@@ -2741,6 +2969,13 @@ function generatePlugin() {
 			});
 		}
 
+		onAudioTrackOptionSelection(ev, newSelection) {
+			this.setState({
+				isOpenAudioTracksOptions: !1,
+				theSelectedAudioTrackOption: newSelection,
+			});
+		}
+
 		onAutoQualitySelection(newAutoQuality) {
 			if (newAutoQuality !== this.state.theSelectedAutoQuality) {
 				this.setState({
@@ -2773,6 +3008,26 @@ function generatePlugin() {
 					});
 
 					ins.timeoutSubtitlesPanelFocusout = null;
+				},
+				100,
+				this
+			);
+		}
+
+		onFocusOutAudioTracksPanel() {
+			if (this.timeoutAudioTracksPanelFocusout) {
+				return;
+			}
+
+			this.player.focus(); // TODO: Remove all this kind of focus(es). Before removal, test the players in MediaCMS, while the window has scrolled down.
+
+			this.timeoutAudioTracksPanelFocusout = setTimeout(
+				function (ins) {
+					ins.setState({
+						isOpenAudioTracksOptions: !1,
+					});
+
+					ins.timeoutAudioTracksPanelFocusout = null;
 				},
 				100,
 				this
@@ -2880,6 +3135,7 @@ function generatePlugin() {
 					quality: this.state.theSelectedQuality,
 					playbackSpeed: this.state.theSelectedPlaybackSpeed,
 					subtitle: this.state.theSelectedSubtitleOption,
+					audioTrack: this.state.theSelectedAudioTrackOption,
 				});
 			}
 		}
@@ -3002,9 +3258,11 @@ function generatePlugin() {
 		playerRatio: 0,
 		isOpenSettingsOptions: !1,
 		isOpenSubtitlesOptions: !1,
+		isOpenAudioTracksOptions: !1,
 		isOpenQualityOptions: !1,
 		theSelectedQuality: null,
 		theSelectedSubtitleOption: 'off',
+		theSelectedAudioTrackOption: null,
 		theSelectedAutoQuality: null,
 		theSelectedPlaybackSpeed: null,
 		openSettings: !1,
@@ -3015,6 +3273,10 @@ function generatePlugin() {
 		openSubtitlesFromKeyboard: !1,
 		closeSubtitles: !1,
 		closeSubtitlesFromKeyboard: !1,
+		openAudioTracks: !1,
+		openAudioTracksFromKeyboard: !1,
+		closeAudioTracks: !1,
+		closeAudioTracksFromKeyboard: !1,
 		openQualities: !1,
 		closeQualities: !1,
 		openQualitiesFromKeyboard: !1,

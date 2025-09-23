@@ -101,9 +101,21 @@ class MediaSerializer(serializers.ModelSerializer):
 class SingleMediaSerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source="user.username")
     url = serializers.SerializerMethodField()
+    subtitles_info = serializers.SerializerMethodField()
+    hls_subtitles_info = serializers.SerializerMethodField()
+    hls_audio_tracks_info = serializers.SerializerMethodField()
 
     def get_url(self, obj):
         return self.context["request"].build_absolute_uri(obj.get_absolute_url())
+
+    def get_subtitles_info(self, obj):
+        return obj.subtitles_info
+
+    def get_hls_subtitles_info(self, obj):
+        return obj.hls_subtitles_info
+
+    def get_hls_audio_tracks_info(self, obj):
+        return obj.hls_audio_tracks_info
 
     class Meta:
         model = Media
@@ -161,6 +173,8 @@ class SingleMediaSerializer(serializers.ModelSerializer):
             "hls_info",
             "license",
             "subtitles_info",
+            "hls_subtitles_info",
+            "hls_audio_tracks_info",
             "chapter_data",
             "ratings_info",
             "add_subtitle_url",
