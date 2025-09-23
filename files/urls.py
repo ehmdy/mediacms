@@ -5,8 +5,6 @@ from django.conf.urls.static import static
 from django.urls import path, re_path
 
 from . import management_views, views
-from .views.track_switching import TrackSwitchingView
-from .views.audio_track_switching import AudioTrackSwitchingView
 from .feeds import IndexRSSFeed, SearchRSSFeed
 
 friendly_token = r"(?P<friendly_token>[\w\-_]*)"
@@ -61,16 +59,6 @@ urlpatterns = [
         rf"^api/v1/media/{friendly_token}$",
         views.MediaDetail.as_view(),
         name="api_get_media",
-    ),
-    re_path(
-        rf"^api/v1/media/{friendly_token}/switch-tracks$",
-        TrackSwitchingView.as_view(),
-        name="api_switch_tracks",
-    ),
-    re_path(
-        rf"^api/v1/media/{friendly_token}/audio-track$",
-        AudioTrackSwitchingView.as_view(),
-        name="api_audio_track_switching",
     ),
     re_path(
         r"^api/v1/media/encoding/(?P<encoding_id>[\w]*)$",
