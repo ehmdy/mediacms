@@ -1,0 +1,262 @@
+// Enhanced Video Player Styles
+
+.enhanced-video-player {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  
+  // Aspect Ratio Controls
+  .aspect-ratio-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    display: flex;
+    gap: 5px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 4px;
+    padding: 5px;
+    
+    .aspect-btn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s ease;
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.5);
+      }
+      
+      &.active {
+        background: #007bff;
+        border-color: #007bff;
+        color: white;
+      }
+      
+      i {
+        font-size: 14px;
+      }
+    }
+  }
+  
+  // Seek Controls
+  .seek-controls {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 4px;
+    padding: 8px;
+    color: white;
+    font-size: 12px;
+    
+    label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 5px;
+      
+      input[type="checkbox"] {
+        margin: 0;
+      }
+    }
+    
+    select {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 2px 5px;
+      border-radius: 3px;
+      font-size: 11px;
+      
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+  }
+  
+  // Aspect Ratio Classes
+  &.aspect-4-3 {
+    .video-js {
+      aspect-ratio: 4/3;
+      max-height: 75vh;
+    }
+  }
+  
+  &.aspect-16-9 {
+    .video-js {
+      aspect-ratio: 16/9;
+      max-height: 56.25vh;
+    }
+  }
+  
+  &.aspect-fullscreen {
+    .video-js {
+      width: 100vw;
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 9999;
+      background: black;
+    }
+  }
+}
+
+// Seek Indicator Styles
+.seek-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 20px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  
+  &.show {
+    opacity: 1;
+  }
+  
+  .seek-icon {
+    font-size: 24px;
+    
+    i {
+      font-size: 24px;
+    }
+  }
+  
+  .seek-amount {
+    font-size: 14px;
+    font-weight: bold;
+  }
+  
+  &.seek-forward {
+    .seek-icon {
+      color: #28a745;
+    }
+  }
+  
+  &.seek-backward {
+    .seek-icon {
+      color: #ffc107;
+    }
+  }
+}
+
+// Enhanced Control Bar Styles
+.video-js {
+  .vjs-control-bar {
+    .vjs-audio-button,
+    .vjs-subtitles-button {
+      .vjs-menu {
+        .vjs-menu-content {
+          max-height: 200px;
+          overflow-y: auto;
+          
+          .vjs-menu-item {
+            padding: 8px 12px;
+            font-size: 14px;
+            
+            &.vjs-selected {
+              background: #007bff;
+              color: white;
+            }
+            
+            &:hover {
+              background: rgba(255, 255, 255, 0.1);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// Quality Label Mapping Styles
+.video-js {
+  .vjs-quality-button {
+    .vjs-menu {
+      .vjs-menu-content {
+        .vjs-menu-item {
+          position: relative;
+          
+          &::after {
+            content: attr(data-mapped-to);
+            position: absolute;
+            right: 10px;
+            font-size: 10px;
+            color: #ccc;
+            opacity: 0.7;
+          }
+        }
+      }
+    }
+  }
+}
+
+// Responsive Design
+@media (max-width: 768px) {
+  .enhanced-video-player {
+    .aspect-ratio-controls {
+      top: 5px;
+      right: 5px;
+      padding: 3px;
+      
+      .aspect-btn {
+        padding: 3px 6px;
+        font-size: 10px;
+        
+        i {
+          font-size: 12px;
+        }
+      }
+    }
+    
+    .seek-controls {
+      top: 5px;
+      left: 5px;
+      padding: 5px;
+      font-size: 11px;
+    }
+  }
+}
+
+// Fullscreen Mode Adjustments
+.video-js.vjs-fullscreen {
+  .enhanced-video-player {
+    .aspect-ratio-controls,
+    .seek-controls {
+      display: none;
+    }
+  }
+}
+
+// Theater Mode Adjustments
+.video-js.vjs-theater-mode {
+  .enhanced-video-player {
+    .aspect-ratio-controls {
+      top: 15px;
+      right: 15px;
+    }
+    
+    .seek-controls {
+      top: 15px;
+      left: 15px;
+    }
+  }
+}

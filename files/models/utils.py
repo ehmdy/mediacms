@@ -69,10 +69,25 @@ def original_media_file_path(instance, filename):
 
 
 def encoding_media_file_path(instance, filename):
-    """Helper function to place encoded media file"""
+    """Helper function to place encoded media file alongside original video"""
 
+    # Get the original file's directory
+    original_path = instance.media.media_file.path
+    original_dir = original_path.rsplit('/', 1)[0]
+    
+    # Create subfolder for the resolution (e.g., /720p/, /480p/)
+    resolution = instance.profile.resolution or instance.profile.name
+    resolution_dir = f"{resolution}p"
+    
+    # Generate filename
     file_name = f"{instance.media.uid.hex}.{helpers.get_file_name(filename)}"
-    return settings.MEDIA_ENCODING_DIR + f"{instance.profile.id}/{instance.media.user.username}/{file_name}"
+    
+    # Return path relative to media root: original_dir/resolution_dir/filename
+    # Remove the media root prefix to get relative path
+    media_root = settings.MEDIA_ROOT.rstrip('/')
+    relative_dir = original_dir.replace(media_root, '').lstrip('/')
+    
+    return f"{relative_dir}/{resolution_dir}/{file_name}"
 
 
 def original_thumbnail_file_path(instance, filename):

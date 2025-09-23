@@ -55,6 +55,7 @@ from .models import (
     VideoChapterData,
     VideoTrimRequest,
 )
+from .models.mkv_tracks import TrackCombination
 
 logger = get_task_logger(__name__)
 
@@ -567,52 +568,13 @@ def produce_sprite_from_video(friendly_token):
 
 @task(name="create_hls", queue="long_tasks")
 def create_hls(friendly_token):
-    """Creates HLS file for media, uses Bento4 mp4hls command"""
-
-    if not hasattr(settings, "MP4HLS_COMMAND"):
-        logger.info("Bento4 mp4hls command is missing from configuration")
-        return False
-
-    if not os.path.exists(settings.MP4HLS_COMMAND):
-        logger.info("Bento4 mp4hls command is missing")
-        return False
-
-    try:
-        media = Media.objects.get(friendly_token=friendly_token)
-    except BaseException:
-        logger.info(f"failed to get media with friendly_token {friendly_token}")
-        return False
-
-    p = media.uid.hex
-    output_dir = os.path.join(settings.HLS_DIR, p)
-    encodings = media.encodings.filter(profile__extension="mp4", status="success", chunk=False, profile__codec="h264")
-
-    if encodings:
-        existing_output_dir = None
-        if os.path.exists(output_dir):
-            existing_output_dir = output_dir
-            output_dir = os.path.join(settings.HLS_DIR, p + produce_friendly_token())
-        files = [f.media_file.path for f in encodings if f.media_file]
-        cmd = [settings.MP4HLS_COMMAND, '--segment-duration=4', f'--output-dir={output_dir}', *files]
-        run_command(cmd)
-
-        if existing_output_dir:
-            # override content with -T !
-            cmd = ["cp", "-rT", output_dir, existing_output_dir]
-            run_command(cmd)
-
-            try:
-                shutil.rmtree(output_dir)
-            except:  # noqa
-                # this was breaking in some cases where it was already deleted
-                # because create_hls was running multiple times
-                pass
-            output_dir = existing_output_dir
-        pp = os.path.join(output_dir, "master.m3u8")
-        if os.path.exists(pp):
-            if media.hls_file != pp:
-                Media.objects.filter(pk=media.pk).update(hls_file=pp)
-    return True
+    """Enhanced HLS creation with multi-audio and subtitle support"""
+    
+    # Import our enhanced HLS module
+    from .enhanced_hls import create_enhanced_hls
+    
+    # Use the enhanced HLS generation
+    return create_enhanced_hls(friendly_token)
 
 
 @task(name="check_running_states", queue="short_tasks")
@@ -1124,3 +1086,128 @@ def video_trim_task(self, trim_request_id):
 # (and check for their encdings, and delete them as well, along with
 # all chunks)
 # 3 beat task, remove chunks
+
+
+@task(bind=True)
+def process_track_combination(self, combination_id):
+    """Process a specific track combination by encoding it with FFmpeg"""
+    try:
+        combination = TrackCombination.objects.get(id=combination_id)
+        media = combination.media
+        
+        logger.info(f"Processing track combination {combination_id} for media {media.id}")
+        
+        # Create track cache directory if it doesn't exist
+        cache_dir = os.path.join(settings.MEDIA_ROOT, 'track_cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # Output file path
+        output_file = os.path.join(cache_dir, f"{combination.cache_key}.mp4")
+        
+        # Build FFmpeg command for track combination
+        cmd = build_track_combination_ffmpeg_command(
+            media.file.path,
+            output_file,
+            combination.audio_track_index,
+            combination.subtitle_track_index
+        )
+        
+        logger.info(f"Running FFmpeg command: {' '.join(cmd)}")
+        
+        # Run FFmpeg command
+        result = run_command(cmd)
+        
+        if result['returncode'] != 0:
+            logger.error(f"FFmpeg failed for combination {combination_id}: {result['stderr']}")
+            combination.is_processed = False
+            combination.save()
+            return False
+        
+        # Get file info
+        file_info = media_file_info(output_file)
+        
+        # Update combination with processed file info
+        combination.video_file_path = output_file
+        combination.file_size = os.path.getsize(output_file)
+        combination.duration = file_info.get('duration', 0)
+        combination.is_processed = True
+        combination.save()
+        
+        logger.info(f"Successfully processed track combination {combination_id}")
+        return True
+        
+    except TrackCombination.DoesNotExist:
+        logger.error(f"Track combination {combination_id} not found")
+        return False
+    except Exception as e:
+        logger.error(f"Error processing track combination {combination_id}: {e}")
+        return False
+
+
+def build_track_combination_ffmpeg_command(input_file, output_file, audio_track_index, subtitle_track_index=None):
+    """Build FFmpeg command for encoding a specific track combination"""
+    cmd = [
+        'ffmpeg',
+        '-i', input_file,
+        '-c:v', 'copy',  # Copy video stream without re-encoding
+        '-map', f'0:a:{audio_track_index}',  # Map specific audio track
+        '-c:a', 'aac',  # Convert audio to AAC
+        '-b:a', '128k',  # Audio bitrate
+    ]
+    
+    # Add subtitle track if specified
+    if subtitle_track_index is not None:
+        cmd.extend([
+            '-map', f'0:s:{subtitle_track_index}',  # Map specific subtitle track
+            '-c:s', 'mov_text',  # Convert subtitles to mov_text format
+        ])
+    
+    # Output file
+    cmd.extend([
+        '-y',  # Overwrite output file
+        output_file
+    ])
+    
+    return cmd
+
+
+@task(bind=True)
+def process_all_track_combinations(self, media_id):
+    """Process all track combinations for a media file"""
+    try:
+        media = Media.objects.get(id=media_id)
+        
+        if not media.is_mkv_with_multiple_tracks:
+            logger.info(f"Media {media_id} does not support track switching")
+            return False
+        
+        logger.info(f"Processing all track combinations for media {media_id}")
+        
+        # Get all track combinations
+        combinations = TrackCombination.objects.filter(media=media, is_processed=False)
+        
+        total_combinations = combinations.count()
+        logger.info(f"Found {total_combinations} track combinations to process")
+        
+        # Process each combination
+        for i, combination in enumerate(combinations):
+            logger.info(f"Processing combination {i+1}/{total_combinations}: {combination}")
+            
+            # Update task progress
+            self.update_state(
+                state='PROGRESS',
+                meta={'current': i+1, 'total': total_combinations}
+            )
+            
+            # Process the combination
+            process_track_combination.delay(combination.id)
+        
+        logger.info(f"Queued {total_combinations} track combinations for processing")
+        return True
+        
+    except Media.DoesNotExist:
+        logger.error(f"Media {media_id} not found")
+        return False
+    except Exception as e:
+        logger.error(f"Error processing track combinations for media {media_id}: {e}")
+        return False

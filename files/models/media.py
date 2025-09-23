@@ -23,6 +23,7 @@ from imagekit.processors import ResizeToFit
 from .. import helpers
 from ..stop_words import STOP_WORDS
 from .encoding import EncodeProfile, Encoding
+from .mkv_tracks import MKVAudioTrack, MKVSubtitleTrack, TrackCombination
 from .subtitle import TranscriptionRequest
 from .utils import (
     ENCODE_RESOLUTIONS_KEYS,
@@ -383,6 +384,9 @@ class Media(models.Model):
             return False
 
         if self.media_type == "video":
+            # Detect MKV tracks if this is an MKV file
+            self.detect_and_save_mkv_tracks()
+            
             self.set_thumbnail(force=True)
             if settings.DO_NOT_TRANSCODE_VIDEO:
                 self.encoding_status = "success"
@@ -394,6 +398,56 @@ class Media(models.Model):
         elif self.media_type == "image":
             self.set_thumbnail(force=True)
         return True
+
+    def detect_and_save_mkv_tracks(self):
+        """Detect and save MKV audio and subtitle tracks"""
+        if not self.media_file or not self.media_file.name.lower().endswith('.mkv'):
+            return False
+            
+        try:
+            # Use the helper function to detect tracks
+            audio_tracks, subtitle_tracks = helpers.detect_mkv_tracks(self.media_file.path)
+            
+            if audio_tracks is None or subtitle_tracks is None:
+                logger.warning(f"Failed to detect tracks in MKV file: {self.media_file.path}")
+                return False
+            
+            # Clear existing tracks
+            self.mkv_audio_tracks.all().delete()
+            self.mkv_subtitle_tracks.all().delete()
+            
+            # Save audio tracks
+            for track_info in audio_tracks:
+                MKVAudioTrack.objects.create(
+                    media=self,
+                    track_index=track_info['track_index'],
+                    codec=track_info['codec'],
+                    language=track_info['language'],
+                    title=track_info['title'],
+                    channels=track_info['channels'],
+                    sample_rate=track_info['sample_rate'],
+                    bitrate=track_info['bitrate'],
+                    is_default=track_info['is_default']
+                )
+            
+            # Save subtitle tracks
+            for track_info in subtitle_tracks:
+                MKVSubtitleTrack.objects.create(
+                    media=self,
+                    track_index=track_info['track_index'],
+                    codec=track_info['codec'],
+                    language=track_info['language'],
+                    title=track_info['title'],
+                    is_forced=track_info['is_forced'],
+                    is_default=track_info['is_default']
+                )
+            
+            logger.info(f"Detected and saved {len(audio_tracks)} audio tracks and {len(subtitle_tracks)} subtitle tracks for media {self.friendly_token}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error detecting MKV tracks for media {self.friendly_token}: {e}")
+            return False
 
     def set_media_type(self, save=True):
         """Sets media type on Media
@@ -807,9 +861,8 @@ class Media(models.Model):
     @property
     def subtitles_info(self):
         """Property used on serializers
-        Returns subtitles info
+        Returns manually uploaded subtitles info
         """
-
         ret = []
         # Retrieve all subtitles and sort by the first letter of their associated language's title
         sorted_subtitles = sorted(self.subtitles.all(), key=lambda s: s.language.title[0])
@@ -821,6 +874,162 @@ class Media(models.Model):
                     "label": subtitle.language.title,
                 }
             )
+        return ret
+
+    @property
+    def is_mkv_with_multiple_tracks(self):
+        """Check if this is an MKV file with multiple audio or subtitle tracks"""
+        if not self.media_type == 'video':
+            return False
+        
+        # Check if it's an MKV file
+        if not self.media_file.name.lower().endswith('.mkv'):
+            return False
+        
+        # Check if we have multiple audio or subtitle tracks
+        audio_count = self.mkv_audio_tracks.count()
+        subtitle_count = self.mkv_subtitle_tracks.count()
+        
+        return audio_count > 1 or subtitle_count > 0
+    
+    @property
+    def default_audio_track(self):
+        """Get the default audio track"""
+        return self.mkv_audio_tracks.filter(is_default=True).first() or self.mkv_audio_tracks.first()
+    
+    @property
+    def default_subtitle_track(self):
+        """Get the default subtitle track"""
+        return self.mkv_subtitle_tracks.filter(is_default=True).first()
+    
+    @property
+    def available_audio_tracks(self):
+        """Get all available audio tracks"""
+        return self.mkv_audio_tracks.all()
+    
+    @property
+    def available_subtitle_tracks(self):
+        """Get all available subtitle tracks"""
+        return self.mkv_subtitle_tracks.all()
+    
+    def get_track_combination_url(self, audio_track_index, subtitle_track_index=None):
+        """Get the URL for a specific track combination"""
+        try:
+            combination = self.track_combinations.get(
+                audio_track_index=audio_track_index,
+                subtitle_track_index=subtitle_track_index
+            )
+            if combination.is_processed:
+                return f"/media/track_cache/{combination.cache_key}.mp4"
+            return None
+        except TrackCombination.DoesNotExist:
+            return None
+
+    @property
+    def hls_subtitles_info(self):
+        """Property used on serializers
+        Returns HLS-generated subtitles info from VTT files
+        """
+        ret = []
+
+        if not self.hls_file:
+            return ret
+
+        # Get HLS directory (convert to absolute path if needed)
+        hls_file_path = os.path.join(settings.MEDIA_ROOT, self.hls_file) if not os.path.isabs(self.hls_file) else self.hls_file
+        hls_dir = os.path.dirname(hls_file_path)
+
+        # Try to load subtitle metadata from JSON file
+        metadata_file = os.path.join(hls_dir, "subtitle_metadata.json")
+        subtitle_metadata = []
+
+        try:
+            import json
+            with open(metadata_file, 'r') as f:
+                subtitle_metadata = json.load(f)
+        except:
+            # Fallback: look for subtitle VTT files directly
+            import glob
+            subtitle_files = glob.glob(os.path.join(hls_dir, "subtitle_*.vtt"))
+            for subtitle_file in sorted(subtitle_files):
+                filename = os.path.basename(subtitle_file)
+                subtitle_index = filename.replace("subtitle_", "").replace(".vtt", "")
+                subtitle_metadata.append({
+                    "file": filename,
+                    "language": f"track_{subtitle_index}",
+                    "title": f"Track {subtitle_index}",
+                    "index": int(subtitle_index)
+                })
+
+        for metadata in subtitle_metadata:
+            subtitle_file = os.path.join(hls_dir, metadata["file"])
+            if os.path.exists(subtitle_file):
+                ret.append({
+                    "src": helpers.url_from_path(subtitle_file),
+                    "srclang": metadata["language"],
+                    "label": metadata["title"],
+                })
+
+        return ret
+
+    @property
+    def hls_audio_tracks_info(self):
+        """Property used on serializers
+        Returns HLS-generated audio tracks info from master.m3u8
+        """
+        ret = []
+
+        if not self.hls_file:
+            return ret
+
+        # Get HLS directory (convert to absolute path if needed)
+        hls_file_path = os.path.join(settings.MEDIA_ROOT, self.hls_file) if not os.path.isabs(self.hls_file) else self.hls_file
+        hls_dir = os.path.dirname(hls_file_path)
+
+        # Try to load audio tracks metadata from JSON file
+        metadata_file = os.path.join(hls_dir, "audio_metadata.json")
+        audio_metadata = []
+
+        try:
+            import json
+            with open(metadata_file, 'r') as f:
+                audio_metadata = json.load(f)
+        except:
+            # Fallback: look for audio files directly
+            import glob
+            audio_files = glob.glob(os.path.join(hls_dir, "audio_*.m4a"))
+            for audio_file in sorted(audio_files):
+                filename = os.path.basename(audio_file)
+                audio_index = filename.replace("audio_", "").replace(".m4a", "")
+                audio_metadata.append({
+                    "file": filename,
+                    "language": f"track_{audio_index}",
+                    "title": f"Track {audio_index}",
+                    "index": int(audio_index)
+                })
+
+        for metadata in audio_metadata:
+            audio_file = os.path.join(hls_dir, metadata["file"])
+            if os.path.exists(audio_file):
+                # Use segmented audio playlist instead of single audio file
+                audio_name = os.path.splitext(metadata["file"])[0]
+                segmented_playlist = f"{audio_name}_segments.m3u8"
+                segmented_playlist_path = os.path.join(hls_dir, segmented_playlist)
+                
+                if os.path.exists(segmented_playlist_path):
+                    ret.append({
+                        "src": helpers.url_from_path(segmented_playlist_path),
+                        "srclang": metadata["language"],
+                        "label": metadata["title"],
+                    })
+                else:
+                    # Fallback to original audio file if segmented playlist doesn't exist
+                    ret.append({
+                        "src": helpers.url_from_path(audio_file),
+                        "srclang": metadata["language"],
+                        "label": metadata["title"],
+                    })
+
         return ret
 
     @property
@@ -858,8 +1067,10 @@ class Media(models.Model):
         res = {}
         valid_resolutions = [144, 240, 360, 480, 720, 1080, 1440, 2160]
         if self.hls_file:
-            if os.path.exists(self.hls_file):
-                hls_file = self.hls_file
+            # Convert relative path to absolute path
+            hls_file_path = os.path.join(settings.MEDIA_ROOT, self.hls_file) if not os.path.isabs(self.hls_file) else self.hls_file
+            if os.path.exists(hls_file_path):
+                hls_file = hls_file_path
                 p = os.path.dirname(hls_file)
                 m3u8_obj = m3u8.load(hls_file)
                 if os.path.exists(hls_file):
