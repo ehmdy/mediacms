@@ -675,6 +675,10 @@ def serve_media_file(request, path):
         
         response = HttpResponse(content, content_type=content_type)
         
+        # Add charset for subtitle files to fix character encoding
+        if file_path.endswith('.vtt'):
+            response['Content-Type'] = 'text/vtt; charset=utf-8'
+        
         # Add CORS headers for HLS
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'

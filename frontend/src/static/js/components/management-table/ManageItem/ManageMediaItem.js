@@ -200,7 +200,33 @@ export function ManageMediaItem(props) {
         {void 0 === props.media_type ? <i className="non-available">N/A</i> : props.media_type}
       </div>
       <div className="mi-encoding">
-        {void 0 === props.encoding_status ? <i className="non-available">N/A</i> : props.encoding_status}
+        {void 0 === props.encoding_status ? (
+          <i className="non-available">N/A</i>
+        ) : (
+          <div className={`encoding-status encoding-status-${props.encoding_status}`}>
+            <span className="encoding-status-text">{props.encoding_status}</span>
+            {props.encoding_status === 'running' && (
+              <div className="encoding-spinner">
+                <div className="spinner"></div>
+              </div>
+            )}
+            {props.encoding_status === 'pending' && (
+              <div className="encoding-indicator">
+                <MaterialIcon type="schedule" />
+              </div>
+            )}
+            {props.encoding_status === 'success' && (
+              <div className="encoding-indicator">
+                <MaterialIcon type="check_circle" />
+              </div>
+            )}
+            {props.encoding_status === 'fail' && (
+              <div className="encoding-indicator">
+                <MaterialIcon type="error" />
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div className="mi-state">{void 0 === props.state ? <i className="non-available">N/A</i> : props.state}</div>
       <div className="mi-reviewed">

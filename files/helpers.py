@@ -219,6 +219,7 @@ def run_command(cmd, cwd=None):
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
     # TODO: catch unicodedecodeerrors here...
+    ret["returncode"] = process.returncode
     if process.returncode == 0:
         try:
             ret["out"] = stdout.decode("utf-8")

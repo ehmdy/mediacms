@@ -16,17 +16,17 @@ import '../VideoViewer.scss';
 
 function filterVideoEncoding(encoding_status) {
   switch (encoding_status) {
-    case 'running_X':
+    case 'running':
       MediaPageStore.set('media-load-error-type', 'encodingRunning');
-      MediaPageStore.set('media-load-error-message', 'Media encoding is currently running. Try again in few minutes.');
+      MediaPageStore.set('media-load-error-message', 'Video is currently being processed. Please wait...');
       break;
-    case 'pending_X':
+    case 'pending':
       MediaPageStore.set('media-load-error-type', 'encodingPending');
-      MediaPageStore.set('media-load-error-message', 'Media encoding is pending');
+      MediaPageStore.set('media-load-error-message', 'Video processing is pending. Please wait...');
       break;
     case 'fail':
       MediaPageStore.set('media-load-error-type', 'encodingFailed');
-      MediaPageStore.set('media-load-error-message', 'Media encoding failed');
+      MediaPageStore.set('media-load-error-message', 'Video processing failed. Please try again later.');
       break;
   }
 }
@@ -69,7 +69,13 @@ export default class VideoViewer extends React.PureComponent {
 
       let defaultVideoResolution = extractDefaultVideoResolution(defaultResolution, this.videoInfo);
 
+      // Check if we have audio tracks - if so, prioritize master playlist for audio switching
+      const hasAudioTracks = this.props.data.hls_audio_tracks_info && this.props.data.hls_audio_tracks_info.length > 0;
+      
+      console.log('🎵 Audio tracks available:', hasAudioTracks, this.props.data.hls_audio_tracks_info);
+      
       if ('Auto' === defaultResolution && void 0 !== this.videoInfo['Auto']) {
+        console.log('🎯 Using master playlist:', this.videoInfo['Auto'].url[0]);
         this.videoSources.push({ src: this.videoInfo['Auto'].url[0] });
       }
 
@@ -77,13 +83,20 @@ export default class VideoViewer extends React.PureComponent {
 
       let srcUrl, k;
 
-      k = 0;
-      while (k < this.videoInfo[defaultVideoResolution].format.length) {
-        if ('hls' === this.videoInfo[defaultVideoResolution].format[k]) {
-          this.videoSources.push({ src: this.videoInfo[defaultVideoResolution].url[k] });
-          break;
+      // If we have audio tracks, skip individual stream URLs and use master playlist only
+      if (!hasAudioTracks) {
+        console.log('🎵 No audio tracks, using individual stream URLs');
+        k = 0;
+        while (k < this.videoInfo[defaultVideoResolution].format.length) {
+          if ('hls' === this.videoInfo[defaultVideoResolution].format[k]) {
+            console.log('🎯 Using individual stream:', this.videoInfo[defaultVideoResolution].url[k]);
+            this.videoSources.push({ src: this.videoInfo[defaultVideoResolution].url[k] });
+            break;
+          }
+          k += 1;
         }
-        k += 1;
+      } else {
+        console.log('🎵 Audio tracks detected, skipping individual streams to use master playlist');
       }
 
       for (k in this.props.data.encodings_info[defaultVideoResolution]) {
@@ -525,7 +538,10 @@ export default class VideoViewer extends React.PureComponent {
       >
         <div className="player-container-inner" ref="playerContainerInner" style={this.props.containerStyles}>
           {this.state.displayPlayer && null !== MediaPageStore.get('media-load-error-type') ? (
-            <VideoPlayerError errorMessage={MediaPageStore.get('media-load-error-message')} />
+            <VideoPlayerError 
+              errorMessage={MediaPageStore.get('media-load-error-message')} 
+              errorType={MediaPageStore.get('media-load-error-type')}
+            />
           ) : null}
 
           {this.state.displayPlayer && null == MediaPageStore.get('media-load-error-type') ? (

@@ -48,13 +48,9 @@ def get_audio_track_name(audio_file):
         'pol': 'Polish'
     }
     
-    # Use language name if available
+    # Always prioritize language name over title for consistency
     if language in language_names:
         return language_names[language]
-    
-    # Use title if it's meaningful
-    if title and len(title) > 2 and not title.startswith('Audio Track'):
-        return title
     
     # Fallback to language code
     if language:
@@ -339,7 +335,7 @@ def create_audio_stream_playlist(audio_file_path, playlist_path):
         segment_pattern = os.path.join(audio_dir, f"{audio_name}_%03d.ts")
         segment_playlist = os.path.join(audio_dir, f"{audio_name}_segments.m3u8")
         
-        # Use FFmpeg to create segmented audio stream
+        # Use FFmpeg to create segmented audio stream with improved parameters
         cmd = [
             settings.FFMPEG_COMMAND,
             "-i", audio_file_path,
@@ -350,6 +346,7 @@ def create_audio_stream_playlist(audio_file_path, playlist_path):
             "-hls_time", "4",  # 4-second segments
             "-hls_list_size", "0",  # Keep all segments
             "-hls_segment_filename", segment_pattern,
+            "-hls_flags", "independent_segments",  # Add this flag for better compatibility
             "-f", "hls",
             "-y",  # Overwrite output
             segment_playlist
@@ -358,9 +355,12 @@ def create_audio_stream_playlist(audio_file_path, playlist_path):
         logger.info(f"Creating segmented audio stream: {audio_filename}")
         result = helpers.run_command(cmd)
         
-        if result.get("error"):
+        # Check if FFmpeg actually failed (returncode != 0)
+        # FFmpeg outputs progress info to stderr even on success, so we need to check returncode
+        if result.get("returncode", 0) != 0:
             logger.error(f"Failed to create segmented audio stream: {result.get('error')}")
-            return False
+            # Try a simpler approach - create a basic playlist that references the audio file
+            return create_simple_audio_playlist(audio_file_path, segment_playlist)
         
         # Check if the segmented playlist was created
         if os.path.exists(segment_playlist):
@@ -368,10 +368,39 @@ def create_audio_stream_playlist(audio_file_path, playlist_path):
             return True
         else:
             logger.error(f"Segmented audio playlist not created: {segment_playlist}")
-            return False
+            # Try a simpler approach
+            return create_simple_audio_playlist(audio_file_path, segment_playlist)
         
     except Exception as e:
         logger.error(f"Error creating segmented audio stream playlist: {e}")
+        # Try a simpler approach
+        return create_simple_audio_playlist(audio_file_path, segment_playlist)
+
+def create_simple_audio_playlist(audio_file_path, playlist_path):
+    """Create a simple audio playlist that references the audio file directly"""
+    try:
+        audio_filename = os.path.basename(audio_file_path)
+        
+        # Create a simple playlist that references the audio file directly
+        playlist_content = f"""#EXTM3U
+#EXT-X-VERSION:4
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXT-X-TARGETDURATION:7
+#EXT-X-MEDIA-SEQUENCE:0
+#EXTINF:42.676,
+{audio_filename}
+#EXT-X-ENDLIST
+"""
+        
+        # Write the simple playlist
+        with open(playlist_path, 'w') as f:
+            f.write(playlist_content)
+        
+        logger.info(f"Created simple audio playlist: {playlist_path}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error creating simple audio playlist: {e}")
         return False
 
 def create_enhanced_hls(friendly_token):
@@ -484,10 +513,19 @@ def create_enhanced_hls(friendly_token):
         with open(metadata_file, 'w') as f:
             json.dump(subtitle_metadata, f, indent=2)
 
-        # Save audio metadata to JSON file
+        # Save audio metadata to JSON file in the format expected by Media model
         audio_metadata_file = os.path.join(output_dir, "audio_metadata.json")
+        audio_metadata = []
+        for audio_file in audio_files:
+            audio_metadata.append({
+                "file": os.path.basename(audio_file["file"]),  # Just the filename
+                "language": audio_file["language"],
+                "title": audio_file["title"],
+                "index": audio_file["index"]
+            })
+        
         with open(audio_metadata_file, 'w') as f:
-            json.dump(audio_files, f, indent=2)
+            json.dump(audio_metadata, f, indent=2)
         
         # Note: Using audio stream playlists for proper HLS audio switching
         

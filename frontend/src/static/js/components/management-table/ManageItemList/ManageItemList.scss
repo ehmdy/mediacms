@@ -193,6 +193,79 @@
     opacity: 0.4;
   }
 
+  // Encoding Status Indicators
+  .encoding-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+
+    .encoding-status-text {
+      text-transform: capitalize;
+    }
+
+    .encoding-indicator {
+      display: flex;
+      align-items: center;
+      
+      .material-icons {
+        font-size: 16px;
+      }
+    }
+
+    .encoding-spinner {
+      display: flex;
+      align-items: center;
+      
+      .spinner {
+        width: 12px;
+        height: 12px;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid var(--default-theme-color);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+    }
+
+    // Status-specific colors
+    &.encoding-status-pending {
+      color: #ff9800;
+      
+      .encoding-indicator .material-icons {
+        color: #ff9800;
+      }
+    }
+
+    &.encoding-status-running {
+      color: #2196f3;
+      
+      .encoding-spinner .spinner {
+        border-top-color: #2196f3;
+      }
+    }
+
+    &.encoding-status-success {
+      color: var(--success-color);
+      
+      .encoding-indicator .material-icons {
+        color: var(--success-color);
+      }
+    }
+
+    &.encoding-status-fail {
+      color: var(--danger-color);
+      
+      .encoding-indicator .material-icons {
+        color: var(--danger-color);
+      }
+    }
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
   .mi-title,
   .mi-name {
     .actions {

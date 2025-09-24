@@ -1011,24 +1011,12 @@ class Media(models.Model):
         for metadata in audio_metadata:
             audio_file = os.path.join(hls_dir, metadata["file"])
             if os.path.exists(audio_file):
-                # Use segmented audio playlist instead of single audio file
-                audio_name = os.path.splitext(metadata["file"])[0]
-                segmented_playlist = f"{audio_name}_segments.m3u8"
-                segmented_playlist_path = os.path.join(hls_dir, segmented_playlist)
-                
-                if os.path.exists(segmented_playlist_path):
-                    ret.append({
-                        "src": helpers.url_from_path(segmented_playlist_path),
-                        "srclang": metadata["language"],
-                        "label": metadata["title"],
-                    })
-                else:
-                    # Fallback to original audio file if segmented playlist doesn't exist
-                    ret.append({
-                        "src": helpers.url_from_path(audio_file),
-                        "srclang": metadata["language"],
-                        "label": metadata["title"],
-                    })
+                # Use the audio file directly instead of segmented playlist
+                ret.append({
+                    "src": helpers.url_from_path(audio_file),
+                    "srclang": metadata["language"],
+                    "label": metadata["title"],
+                })
 
         return ret
 
@@ -1185,6 +1173,58 @@ class MediaPermission(models.Model):
         return f"{self.user.username} - {self.media.title} ({self.permission})"
 
 
+def trigger_video_processing(media_instance):
+    """
+    Trigger video processing with synchronous processing to ensure it happens
+    """
+    try:
+        logger.info(f"Triggering video processing for: {media_instance.friendly_token}")
+        
+        # Use the existing encode method to create encoding objects
+        result = media_instance.encode()
+        
+        if result:
+            logger.info(f"Encoding objects created for: {media_instance.friendly_token}")
+            
+            # Process encodings synchronously to ensure they complete
+            from .. import tasks
+            
+            pending_encodings = media_instance.encodings.filter(status='pending')
+            logger.info(f"Processing {pending_encodings.count()} encodings synchronously")
+            
+            for encoding in pending_encodings:
+                try:
+                    enc_url = f'http://localhost/encoding/{encoding.id}/'
+                    encoding_result = tasks.encode_media(
+                        media_instance.friendly_token,
+                        encoding.profile.id,
+                        encoding.id,
+                        enc_url,
+                        force=True
+                    )
+                    logger.info(f"Encoding {encoding.profile.name}: {encoding_result}")
+                except Exception as e:
+                    logger.error(f"Error encoding {encoding.profile.name}: {e}")
+            
+            # Trigger HLS generation
+            try:
+                hls_result = tasks.create_hls(media_instance.friendly_token)
+                logger.info(f"HLS generation result: {hls_result}")
+            except Exception as e:
+                logger.warning(f"HLS generation failed: {e}")
+            
+            return True
+        else:
+            logger.error(f"Failed to create encoding objects for: {media_instance.friendly_token}")
+            return False
+        
+    except Exception as e:
+        logger.error(f"Error triggering video processing: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 @receiver(post_save, sender=Media)
 def media_save(sender, instance, created, **kwargs):
     # media_file path is not set correctly until mode is saved
@@ -1199,6 +1239,12 @@ def media_save(sender, instance, created, **kwargs):
         from ..methods import notify_users
 
         instance.media_init()
+        
+        # Trigger comprehensive video processing for video files
+        if instance.media_type == "video" and not settings.DO_NOT_TRANSCODE_VIDEO:
+            logger.info(f"Triggering video processing for new upload: {instance.friendly_token}")
+            trigger_video_processing(instance)
+        
         notify_users(friendly_token=instance.friendly_token, action="media_added")
 
     instance.user.update_user_media()

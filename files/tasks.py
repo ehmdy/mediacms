@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from datetime import datetime, timedelta
 
 from celery import Task
@@ -317,6 +318,10 @@ def encode_media(
     encoding.worker = "localhost"
     encoding.retries = self.request.retries
     encoding.save()
+    
+    # Update media's overall encoding status to "running"
+    media.set_encoding_status()
+    media.save(update_fields=["encoding_status"])
 
     if profile.extension == "gif":
         tf = create_temp_file(suffix=".gif")
@@ -575,6 +580,81 @@ def create_hls(friendly_token):
     
     # Use the enhanced HLS generation
     return create_enhanced_hls(friendly_token)
+
+
+@task(name="transcode_video", queue="long_tasks")
+def transcode_video(media_id):
+    """
+    Comprehensive video transcoding task that handles:
+    - MKV track detection
+    - Video encoding (480p, 720p)
+    - HLS generation with multi-track support
+    - Audio/subtitle processing
+    """
+    logger.info(f"Starting transcode_video for media_id: {media_id}")
+    
+    try:
+        media = Media.objects.get(id=media_id)
+        logger.info(f"Processing media: {media.title} ({media.friendly_token})")
+        
+        # Step 1: Detect MKV tracks if applicable
+        if media.media_file and media.media_file.name.lower().endswith('.mkv'):
+            logger.info("Detecting MKV tracks...")
+            media.detect_and_save_mkv_tracks()
+        
+        # Step 2: Set thumbnail
+        logger.info("Setting thumbnail...")
+        media.set_thumbnail(force=True)
+        
+        # Step 3: Trigger encoding
+        logger.info("Triggering encoding...")
+        encoding_result = media.encode()
+        
+        if not encoding_result:
+            logger.error(f"Encoding failed for media: {media.friendly_token}")
+            return False
+        
+        # Step 4: Wait for encoding to complete (for synchronous processing)
+        logger.info("Waiting for encoding to complete...")
+        max_wait_time = 300  # 5 minutes
+        wait_interval = 5    # 5 seconds
+        elapsed_time = 0
+        
+        while elapsed_time < max_wait_time:
+            media.refresh_from_db()
+            if media.encoding_status == 'success':
+                logger.info("Encoding completed successfully")
+                break
+            elif media.encoding_status == 'fail':
+                logger.error("Encoding failed")
+                return False
+            
+            time.sleep(wait_interval)
+            elapsed_time += wait_interval
+            logger.info(f"Waiting for encoding... Status: {media.encoding_status}")
+        
+        if elapsed_time >= max_wait_time:
+            logger.warning("Encoding timeout, proceeding with HLS generation")
+        
+        # Step 5: Generate HLS with multi-track support
+        logger.info("Generating HLS with multi-track support...")
+        hls_result = create_hls(media.friendly_token)
+        
+        if hls_result:
+            logger.info(f"Successfully processed media: {media.friendly_token}")
+            return True
+        else:
+            logger.error(f"HLS generation failed for media: {media.friendly_token}")
+            return False
+            
+    except Media.DoesNotExist:
+        logger.error(f"Media with id {media_id} not found")
+        return False
+    except Exception as e:
+        logger.error(f"Error in transcode_video: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 @task(name="check_running_states", queue="short_tasks")

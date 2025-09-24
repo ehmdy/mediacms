@@ -19,13 +19,30 @@ export function formatInnerLink(url, baseUrl) {
 }
 
 export function VideoPlayerError(props) {
+  const isProcessing = props.errorType === 'encodingRunning' || props.errorType === 'encodingPending';
+  
   return (
-    <div className="error-container">
+    <div className={`error-container ${isProcessing ? 'processing-container' : ''}`}>
       <div className="error-container-inner">
         <span className="icon-wrap">
-          <i className="material-icons">error_outline</i>
+          {isProcessing ? (
+            <div className="processing-spinner">
+              <div className="spinner"></div>
+            </div>
+          ) : (
+            <i className="material-icons">error_outline</i>
+          )}
         </span>
         <span className="msg-wrap">{props.errorMessage}</span>
+        {isProcessing && (
+          <div className="processing-status">
+            <div className="status-indicator">
+              <span className="status-text">
+                {props.errorType === 'encodingRunning' ? 'Processing...' : 'Queued for processing...'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -33,6 +50,7 @@ export function VideoPlayerError(props) {
 
 VideoPlayerError.propTypes = {
   errorMessage: PropTypes.string.isRequired,
+  errorType: PropTypes.string,
 };
 
 export function VideoPlayer(props) {
